@@ -60,24 +60,6 @@ struct Clearing {
         Bits 61-62 Figure Value 3 (0-2, 3 = unused)
         Bit 63: Tablet Value 1 (0-1)
         Bit 64: Tablet Value 2 (0-1)
-    } Bits 41-63: Tokens {
-        Bits 41-44: Wood (0-8 (9-15 unused))
-        Bit 45: Keep (0-1)
-        Bit 46: Sympathy (0-1)
-        Bit 47: Mouse Trade Post (0-1)
-        Bit 48: Fox Trade Post (0-1)
-        Bit 49: Rabbit Trade Post (0-1)
-        Bit 50: Bomb Plot (0-1)
-        Bit 51-52: Snare Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bits 53-54: Extortion Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bits 55-56: Raid Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bit 57: Tunnel (0-1)
-        Bit 58: Mob (0-1)
-        Bit 59 Figure Value 1 (0-1)
-        Bit 60 Figure Value 2 (0-1)
-        Bits 61-62 Figure Value 3 (0-2, 3 = unused)
-        Bit 63: Tablet Value 1 (0-1)
-        Bit 64: Tablet Value 2 (0-1)
     }
     */
     int64_t data;
