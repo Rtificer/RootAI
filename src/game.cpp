@@ -1,106 +1,183 @@
-#include <cstdint>
+#include "game.hpp"
 
-struct Clearing {
-    /*
-    24 bits: Connected Clearings {
-        Connection (2 bits): {
-            0 = No connection
-            1 = Normal
-            2 = By water
-            3 = Blocked
-        } x 12 for each clearing
-    }
-        
-    24 bits: Building Slots (4 slots times 5 bits for building type, plus 1 bit for Elder Treetop Toggle) {
-        Slot (6 bits): {
-            Current Building (5 bits): {
-                0 = Not a slot in this clearing
-                1 = No building,
-                2 = Ruin w/ Bag
-                3 = Ruin w/ Sword
-                4 = Ruin w/ Boots
-                5 = Ruin w/ Hammer
-                6 = Workshop,
-                7 = Sawmill,
-                8 = Roost,
-                9 = Mouse Base,
-                10 = Fox Base,
-                11 = Rabbit Base,
-                12 = Mouse Garden,
-                13 = Fox Garden,
-                14 = Rabbit Garden,
-                15 = Citadel,
-                16 = Market,
-                17 = Stronghold,
-                18 = Figure / Waystation
-                19 = Tablet / Jewelry Waystation
-                20 = Jewelry / Figure Waystation
-                21-31 = unused
-            }  
-            Is on Elder Treetop? (1 bit): {
-                0 = No
-                1 = Yes
-            }
-        } x 4 for each possible slot
-    }
+Game::Game(
+    SetupType setup_type,
+    Map map,
+    std::vector<FactionID> factions,
+    Landmark landmark,
+    uint8_t landmark_clearing_index,
+    DeckType deck_type,
+    uint8_t player_count,
+    bool double_vagabond)
+    : setup_type(setup_type),
+      map(map),
+      factions(factions),
+      landmark(landmark),
+      landmark_clearing_index(landmark_clearing_index),
+      deck_type(deck_type),
+      player_count(player_count),
+      double_vagabond(double_vagabond)
+{
+}
 
-    28 Bits: Tokens {
-        Bits 1-3: Wood (0-8 (9-15 unused))
-        Bit 4: Keep (0-1)
-        Bit 5: Sympathy (0-1)
-        Bit 6: Mouse Trade Post (0-1)
-        Bit 7: Fox Trade Post (0-1)
-        Bit 8: Rabbit Trade Post (0-1)
-        Bit 9: Bomb Plot (0-1)
-        Bit 10-11: Snare Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bits 12-13: Extortion Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bits 14-15: Raid Plot (0 = none, 1 = Face Down, 2 = Face Up, 3 = unused)
-        Bit 16: Tunnel (0-1)
-        Bit 17: Mob (0-1)
-        Bit 18 Figure Value 1 (0-1)
-        Bit 19 Figure Value 2 (0-1)
-        Bits 20-21 Figure Value 3 (0-2, 3 = unused)
-        Bit 22: Tablet Value 1 (0-1)
-        Bit 23: Tablet Value 2 (0-1)
-        Bits 24-25: Tablet Value 3 (0-2, 3 = unused)
-        Bit 26: Jewelry Value 1 (0-1)
-        Bit 27: Jewelry Value 2 (0-1)
-        Bit 28: Jewelry Value 3 (0-2, 3 = unused)
-    }
-
-    44 Bits Warrior Data {
-        Bits 1-5: Marquise de Cat Warriors (0-25, 26-31 uneeded)
-        Bits 6-10: Eyrie Dynasties Warriors (0-20, 21-31 uneeded)
-        Bit 11: Vagabond 1 (0-1)
-        Bit 12: Vagabond 2 (0-1)
-        Bits 13-16: Woodland Alliance Warriors (0-10, 11-15 uneeded)
-        Bits 17-20: Riverfolk Company Warriors (0-15)
-        Bits 21-25: Lizard Cult Warriors (0-25, 26-31 uneeded)
-        Bits 26-29: Corvid Conspiracy Warriors (0-15)
-        Bits 30-34: Underground Duchy Warriors (0-20, 21-31 uneeded)
-        Bits 35-39: Lord of the Hundreds Warriors (0-20, 21-31 uneeded)
-        Bit 40: Lord of the Hundreds Warlord (0-1)
-        Bits 41-44: Keepers in Iron Warriors (0-15)
-    }
-
-    2 Bits: Clearing Type {
-        0 = Mouse
-        1 = Fox
-        2 = Rabbit
-        3 = None
-    }
-
-    24 Bits: Connected Forests {
-        4 Bits: Clearing Index (0-12, 13-14 unused)
-    } x 6 for each possible connection
-
-    1 Bit: Razed? (0-1)
-    */
-};
-
-class Game {
-    public:
-        Game() {
-
+void Game::setup_marquise_de_cat_starting_building(Building building, std::array<uint8_t, 12> &starting_buildings_indices)
+{
+    while (true)
+    {
+        switch (building)
+        {
+        case Building::Sawmill:
+            std::cout << "Choose Marquise de Cat Sawmill Clearing" << std::endl;
+            break;
+        case Building::Workshop:
+            std::cout << "Choose Marquise de Cat Workshop Clearing" << std::endl;
+            break;
+        case Building::Recruiter:
+            std::cout << "Choose Marquise de Cat Recruiter Clearing" << std::endl;
+            break;
         }
-};
+        uint8_t building_clearing_index;
+        std::cin >> building_clearing_index;
+        if (building_clearing_index < 12 && starting_buildings_indices[building_clearing_index] != 255)
+        {
+            clearings[building_clearing_index].set_building_slot(
+                starting_buildings_indices[building_clearing_index],
+                {building, clearings[building_clearing_index].get_building_slot(starting_buildings_indices[building_clearing_index]).isOnElderTreetop});
+
+            starting_buildings_indices[building_clearing_index] = clearings[building_clearing_index].get_next_empty_building_slot_index(starting_buildings_indices[building_clearing_index]);
+            break;
+        }
+        std::cout << "Invalid clearing index. Please choose a valid building clearing." << std::endl;
+    }
+}
+
+bool Game::setup()
+{
+    if (map == Map::Random)
+        map = static_cast<Map>(map_dist(rng));
+
+    switch (setup_type)
+    {
+    case SetupType::Standard:
+        if (factions.size() > player_count - 1)
+            return false;
+
+        seating_order.resize(player_count);
+        starting_clearing_indices.resize(player_count, 0);
+
+        bool has_vagabond1 = std::find(factions.begin(), factions.end(), FactionID::Vagabond1) != factions.end();
+        bool has_vagabond2 = std::find(factions.begin(), factions.end(), FactionID::Vagabond2) != factions.end();
+
+        while (factions.size() < player_count - 1)
+        {
+            FactionID potential_faction = static_cast<FactionID>(faction_dist(rng));
+
+            if (potential_faction == FactionID::Vagabond1)
+            {
+                if (!has_vagabond1)
+                {
+                    factions.push_back(FactionID::Vagabond1);
+                    has_vagabond1 = true;
+                }
+            }
+            else if (potential_faction == FactionID::Vagabond2)
+            {
+                if (double_vagabond && has_vagabond1 && !has_vagabond2)
+                {
+                    factions.push_back(FactionID::Vagabond2);
+                    has_vagabond2 = true;
+                }
+            }
+            else
+            {
+                if (std::find(factions.begin(), factions.end(), potential_faction) == factions.end())
+                {
+                    factions.push_back(potential_faction);
+                }
+            }
+        }
+
+        std::iota(seating_order.begin(), seating_order.end(), 0);
+        std::shuffle(seating_order.begin(), seating_order.end(), rng);
+
+        auto marquise_pointer = std::find(factions.begin(), factions.end(), static_cast<FactionID>
+        (FactionID::MarquiseDeCat));
+        uint8_t marquise_index = 255;
+        if (marquise_pointer != factions.end())
+        {
+            marquise_index = std::distance(factions.begin(), marquise_pointer);
+            while (true)
+            {
+                uint8_t clearing_index;
+                std::cout << "Choose Marquise de Cat Keep Clearing" << std::endl;
+                std::cin >> clearing_index;
+                if (is_corner_clearing(clearing_index))
+                {
+                    starting_clearing_indices.at(marquise_index) = clearing_index;
+                    break;
+                }
+                std::cout << "Invalid clearing index. Please choose a corner clearing (0, 3, 8, or 11)." << std::endl;
+            }
+
+            for (uint8_t j = 0; j < 12; ++j)
+            {
+                if (j != OPPOSITE_CORNER[starting_clearing_indices.at(marquise_index)])
+                {
+                    clearings[j].set_pawn_count(FactionID::MarquiseDeCat, 1);
+                }
+            }
+
+            // index = clearing, value = valid building index, 255 = invalid
+            std::array<uint8_t, 12> starting_buildings_indices;
+            for (uint8_t j = 0; j < 12; ++j)
+            {
+                if (clearings[starting_clearing_indices.at(marquise_index)].get_clearing_connection(j) == ClearingConnection::Normal)
+                {
+                    starting_buildings_indices[j] = clearings[j].get_next_empty_building_slot_index(0);
+                }
+            }
+
+            setup_marquise_de_cat_starting_building(Building::Sawmill, starting_buildings_indices);
+            setup_marquise_de_cat_starting_building(Building::Workshop, starting_buildings_indices);
+            setup_marquise_de_cat_starting_building(Building::Recruiter, starting_buildings_indices);
+        }
+
+        auto eyrie_pointer = std::find(factions.begin(), factions.end(), static_cast<FactionID>(FactionID::EyrieDynasties));
+        uint8_t eyrie_index = 255;
+        if (eyrie_pointer != factions.end())
+        {
+            eyrie_index = std::distance(factions.begin(), eyrie_pointer);
+            if (marquise_pointer == factions.end())
+            {
+                while (true)
+                {
+                    uint8_t clearing_index;
+                    std::cout << "Choose Eyrie Dynasties Starting Clearing" << std::endl;
+                    std::cin >> clearing_index;
+                    if (is_corner_clearing(clearing_index))
+                    {
+                        starting_clearing_indices.at(eyrie_index) = clearing_index;
+                        break;
+                    }
+                    std::cout << "Invalid clearing index. Please choose a corner clearing (0, 3, 8, or 11)." << std::endl;
+                }
+            }
+            else
+            {
+                starting_clearing_indices.at(eyrie_index) = OPPOSITE_CORNER[starting_clearing_indices.at(marquise_index)];
+            }
+
+            clearings[starting_clearing_indices.at(eyrie_index)].set_pawn_count(FactionID::EyrieDynasties, 6);
+
+            //TODO: Choose Eyrie Leader
+            //Select Visors for that leader
+        }
+
+        break;
+    case SetupType::Advanced:
+        // Initialize advanced setup
+        break;
+    default:
+        return false; // Invalid setup type
+    }
+}
