@@ -1,15 +1,5 @@
 {
-    "ros.distro": "jazzy",
-    "cSpell.words": [
-        "Birdy",
-        "Codebreakers",
-        "Corvid",
-        "Foxfolk",
-        "Riverfolk"
-    ],
     "files.associations": {
-        "cstdint": "cpp",
-        "array": "cpp",
         "cctype": "cpp",
         "clocale": "cpp",
         "cmath": "cpp",
@@ -21,6 +11,7 @@
         "ctime": "cpp",
         "cwchar": "cpp",
         "cwctype": "cpp",
+        "array": "cpp",
         "atomic": "cpp",
         "bit": "cpp",
         "bitset": "cpp",
@@ -29,7 +20,7 @@
         "compare": "cpp",
         "complex": "cpp",
         "concepts": "cpp",
-        "condition_variable": "cpp",
+        "cstdint": "cpp",
         "deque": "cpp",
         "list": "cpp",
         "map": "cpp",
@@ -75,5 +66,13 @@
         "variant": "cpp",
         "format": "cpp"
     },
-    "C_Cpp.default.compilerPath": "/bin/g++-14"
+    "cSpell.words": [
+        "Birdy",
+        "Codebreakers",
+        "Corvid",
+        "Foremole",
+        "Foxfolk",
+        "Riverfolk"
+    ],
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++-18"
 }

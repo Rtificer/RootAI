@@ -2,314 +2,255 @@
 
 // --- Clearing Implementation ---
 
-Clearing::Clearing() : data1(0), data2(0), data3(0) {}
-
 template <typename T>
-T Clearing::read_bits(uint8_t shift, uint8_t width) const
-{
-    if (shift + width <= 64)
-    {
-        uint64_t mask = ((1ULL << width) - 1) << shift;
-        return static_cast<T>((data1 & mask) >> shift);
+[[nodiscard]] T Clearing::read_bits(uint8_t shift, uint8_t width) const {
+  uint64_t result = 0;
+  uint8_t byte_index = shift / 8;
+  uint8_t bit_offset = shift % 8;
+
+  // Read bits across multiple bytes if necessary
+  for (uint8_t i = 0; i < width; ++i) {
+    uint8_t current_byte = byte_index + (bit_offset + i) / 8;
+    uint8_t current_bit = (bit_offset + i) % 8;
+
+    if (current_byte < data.size()) {
+      uint8_t bit_value = (data[current_byte] >> current_bit) & 1;
+      result |= (static_cast<uint64_t>(bit_value) << i);
     }
-    else if (shift < 64 && shift + width <= 128)
-    {
-        uint8_t bits_in_data1 = 64 - shift;
-        uint8_t bits_in_data2 = width - bits_in_data1;
-        uint64_t mask1 = ((1ULL << bits_in_data1) - 1) << shift;
-        uint64_t mask2 = (1ULL << bits_in_data2) - 1;
-        uint64_t part1 = (data1 & mask1) >> shift;
-        uint64_t part2 = (data2 & mask2);
-        return static_cast<T>(part1 | (part2 << bits_in_data1));
-    }
-    else if (shift + width <= 128)
-    {
-        uint8_t shift2 = shift - 64;
-        uint64_t mask = ((1ULL << width) - 1) << shift2;
-        return static_cast<T>((data2 & mask) >> shift2);
-    }
-    else if (shift < 128 && shift + width <= 192)
-    {
-        uint8_t bits_in_data2 = 128 - shift;
-        uint8_t bits_in_data3 = width - bits_in_data2;
-        uint64_t mask2 = ((1ULL << bits_in_data2) - 1) << (shift - 64);
-        uint32_t mask3 = (1U << bits_in_data3) - 1;
-        uint64_t part2 = (data2 & mask2) >> (shift - 64);
-        uint32_t part3 = (data3 & mask3);
-        return static_cast<T>(part2 | (static_cast<uint64_t>(part3) << bits_in_data2));
-    }
-    else
-    {
-        uint8_t shift3 = shift - 128;
-        uint32_t mask = ((1U << width) - 1) << shift3;
-        return static_cast<T>((data3 & mask) >> shift3);
-    }
+  }
+
+  return static_cast<T>(result);
 }
 
-void Clearing::write_bits(uint64_t value, uint8_t shift, uint8_t width)
-{
-    if (shift + width <= 64)
-    {
-        uint64_t mask = ((1ULL << width) - 1) << shift;
-        data1 = (data1 & ~mask) | ((value << shift) & mask);
+void Clearing::write_bits(uint8_t value, uint8_t shift, uint8_t width) {
+  uint8_t byte_index = shift / 8;
+  uint8_t bit_offset = shift % 8;
+
+  // Write bits across multiple bytes if necessary
+  for (uint8_t i = 0; i < width; ++i) {
+    uint8_t current_byte = byte_index + (bit_offset + i) / 8;
+    uint8_t current_bit = (bit_offset + i) % 8;
+
+    if (current_byte < data.size()) {
+      uint8_t bit_value = (value >> i) & 1;
+      // Clear the bit first, then set it
+      data[current_byte] &= ~(1 << current_bit);
+      data[current_byte] |= (bit_value << current_bit);
     }
-    else if (shift < 64 && shift + width <= 128)
-    {
-        uint8_t bits_in_data1 = 64 - shift;
-        uint8_t bits_in_data2 = width - bits_in_data1;
-        uint64_t mask1 = ((1ULL << bits_in_data1) - 1) << shift;
-        uint64_t mask2 = (1ULL << bits_in_data2) - 1;
-        data1 = (data1 & ~mask1) | ((value << shift) & mask1);
-        data2 = (data2 & ~mask2) | ((value >> bits_in_data1) & mask2);
-    }
-    else if (shift + width <= 128)
-    {
-        uint8_t shift2 = shift - 64;
-        uint64_t mask = ((1ULL << width) - 1) << shift2;
-        data2 = (data2 & ~mask) | ((value << shift2) & mask);
-    }
-    else if (shift < 128 && shift + width <= 192)
-    {
-        uint8_t bits_in_data2 = 128 - shift;
-        uint8_t bits_in_data3 = width - bits_in_data2;
-        uint64_t mask2 = ((1ULL << bits_in_data2) - 1) << (shift - 64);
-        uint32_t mask3 = (1U << bits_in_data3) - 1;
-        data2 = (data2 & ~mask2) | ((value << (shift - 64)) & mask2);
-        data3 = (data3 & ~mask3) | ((static_cast<uint32_t>(value >> bits_in_data2)) & mask3);
-    }
-    else
-    {
-        uint8_t shift3 = shift - 128;
-        uint32_t mask = ((1U << width) - 1) << shift3;
-        data3 = (data3 & ~mask) | ((static_cast<uint32_t>(value) << shift3) & mask);
-    }
+  }
 }
 
-ClearingConnection Clearing::get_clearing_connection(uint8_t index) const
-{
-    if (index >= TOTAL_CLEARINGS)
-    {
-        return ClearingConnection::MaxConnectionIndex;
-    }
-    uint8_t shift = CONNECTED_CLEARINGS_SHIFT + index * CLEARING_CONNECTION_BITS;
-    return read_bits<ClearingConnection>(shift, CLEARING_CONNECTION_BITS);
+[[nodiscard]] ClearingConnection Clearing::get_clearing_connection(
+    uint8_t index) const {
+  if (index >= kTotalClearings) {
+    return ClearingConnection::kMaxConnectionIndex;
+  }
+  uint8_t shift = kConnectedClearingsShift + index * kClearingConnectionBits;
+  return read_bits<ClearingConnection>(shift, kClearingConnectionBits);
 }
 
-bool Clearing::set_clearing_connection(uint8_t index, ClearingConnection value)
-{
-    if (index < TOTAL_CLEARINGS)
-    {
-        uint64_t shift = CONNECTED_CLEARINGS_SHIFT + index * CLEARING_CONNECTION_BITS;
-        write_bits(static_cast<uint64_t>(value), shift, CLEARING_CONNECTION_BITS);
-        return true;
-    }
+bool Clearing::set_clearing_connection(uint8_t index,
+                                       ClearingConnection value) {
+  if (index < kTotalClearings) {
+    uint64_t shift = kConnectedClearingsShift + index * kClearingConnectionBits;
+    write_bits(static_cast<uint64_t>(value), shift, kClearingConnectionBits);
+    return true;
+  }
+  return false;
+}
+
+[[nodiscard]] BuildingSlot Clearing::get_building_slot(uint8_t index) const {
+  if (index >= kTotalBuildingSlots) {
+    return {Building::kNotASlot, false};
+  }
+  Building building = read_bits<Building>(
+      kBuildingSlotsShift + kBuildingSlotBits * index, kBuildingTypeBits);
+  bool isTreetop = read_bits<bool>(
+      kBuildingSlotsShift + (kBuildingSlotBits * index) + kBuildingTypeBits,
+      kTreetopToggleBits);
+  return {building, isTreetop};
+}
+
+bool Clearing::set_building_slot(uint8_t index, const BuildingSlot &slot) {
+  if (index >= kTotalBuildingSlots) {
     return false;
+  }
+  uint8_t value =
+      (static_cast<uint8_t>(slot.currentBuilding) & kBuildingTypeMask) |
+      ((slot.isOnElderTreetop ? 1 : 0) << kBuildingTypeBits);
+  uint8_t shift = kBuildingSlotsShift + index * kBuildingSlotBits;
+  write_bits(value, shift, kBuildingSlotBits);
+  return true;
 }
 
-BuildingSlot Clearing::get_building_slot(uint8_t index) const
-{
-    if (index >= TOTAL_BUILDING_SLOTS)
-    {
-        return {Building::NotASlot, false};
+[[nodiscard]] uint8_t Clearing::get_token_count(Token token) const {
+  if (static_cast<uint8_t>(token) >=
+      static_cast<uint8_t>(Token::kMaxTokenIndex)) {
+    return 0;
+  }
+  const TokenInfo &info = kTokenFieldInfo[static_cast<uint8_t>(token)];
+  return read_bits<uint8_t>(kTokensShift + info.offset, info.width);
+}
+
+bool Clearing::set_token_count(Token token, uint8_t count) {
+  if (static_cast<uint8_t>(token) >=
+      static_cast<uint8_t>(Token::kMaxTokenIndex))
+    return false;
+  const TokenInfo &info = kTokenFieldInfo[static_cast<uint8_t>(token)];
+  write_bits(count, kTokensShift + info.offset, info.width);
+  return true;
+}
+
+[[nodiscard]] uint8_t Clearing::get_pawn_count(FactionID factionID) const {
+  if (static_cast<uint8_t>(factionID) >=
+      static_cast<uint8_t>(FactionID::kMaxFactionID))
+    return 0;
+  const PawnInfo &info = kPawnFieldInfo[static_cast<uint8_t>(factionID)];
+  uint8_t shift = kPawnDataShift + info.offset;
+  return read_bits<uint8_t>(shift, info.width);
+}
+
+bool Clearing::set_pawn_count(FactionID factionID, uint8_t count) {
+  if (static_cast<uint8_t>(factionID) >=
+      static_cast<uint8_t>(FactionID::kMaxFactionID))
+    return false;
+  const PawnInfo &info = kPawnFieldInfo[static_cast<uint8_t>(factionID)];
+  uint8_t shift = kPawnDataShift + info.offset;
+  write_bits(count, shift, info.width);
+  return true;
+}
+
+[[nodiscard]] bool Clearing::is_lord_of_the_hundreds_warlord_present() const {
+  const PawnInfo &info =
+      kPawnFieldInfo[static_cast<uint8_t>(FactionID::kLordOfTheHundreds) + 1];
+  uint8_t shift = kPawnDataShift + info.offset;
+  return read_bits<bool>(shift, info.width);
+}
+
+void Clearing::set_lord_of_the_hundreds_warlord_present(bool present) {
+  const PawnInfo &info =
+      kPawnFieldInfo[static_cast<uint8_t>(FactionID::kLordOfTheHundreds) + 1];
+  uint8_t shift = kPawnDataShift + info.offset;
+  write_bits(present ? 1 : 0, shift, info.width);
+}
+
+[[nodiscard]] ClearingType Clearing::get_clearing_type() const {
+  return read_bits<ClearingType>(kClearingTypeShift, kClearingTypeBits);
+}
+
+void Clearing::set_clearing_type(ClearingType type) {
+  write_bits(static_cast<uint8_t>(type), kClearingTypeShift, kClearingTypeBits);
+}
+
+[[nodiscard]] bool Clearing::get_connected_forest(uint8_t index) const {
+  uint8_t shift = kConnectedForestsShift + index * kForestConnectionBits;
+  return read_bits<bool>(shift, kForestConnectionBits);
+}
+
+void Clearing::set_connected_forest(uint8_t index, bool value) {
+  uint8_t shift = kConnectedForestsShift + index * kForestConnectionBits;
+  write_bits(value ? 1 : 0, shift, kForestConnectionBits);
+}
+
+[[nodiscard]] bool Clearing::is_razed() const {
+  return read_bits<bool>(kRazedShift, kRazedBits);
+}
+
+void Clearing::set_razed(bool value) {
+  write_bits(value ? 1 : 0, kRazedShift, kRazedBits);
+}
+
+[[nodiscard]] Landmark Clearing::get_landmark() const {
+  return read_bits<Landmark>(kLandmarkShift, kLandmarkBits);
+}
+
+void Clearing::set_landmark(Landmark landmark) {
+  write_bits(static_cast<uint8_t>(landmark), kLandmarkShift, kLandmarkBits);
+}
+
+[[nodiscard]] uint8_t Clearing::get_next_empty_building_slot_index(
+    uint8_t starting_index) const {
+  for (uint8_t i = starting_index; i < 4; ++i) {
+    if (get_building_slot(i).currentBuilding == Building::kNoBuilding) {
+      return i;
     }
-    Building building = read_bits<Building>(BUILDING_SLOTS_SHIFT + BUILDING_SLOT_BITS * index, BUILDING_TYPE_BITS);
-    bool isTreetop = read_bits<bool>(BUILDING_SLOTS_SHIFT + (BUILDING_SLOT_BITS * index) + BUILDING_TYPE_BITS, TREETOP_TOGGLE_BITS);
-    return {building, isTreetop};
-}
-
-bool Clearing::set_building_slot(uint8_t index, const BuildingSlot &slot)
-{
-    if (index >= TOTAL_BUILDING_SLOTS)
-    {
-        return false;
-    }
-    uint8_t value = (static_cast<uint8_t>(slot.currentBuilding) & BUILDING_TYPE_MASK) | ((slot.isOnElderTreetop ? 1 : 0) << BUILDING_TYPE_BITS);
-    uint8_t shift = BUILDING_SLOTS_SHIFT + index * BUILDING_SLOT_BITS;
-    write_bits(value, shift, BUILDING_SLOT_BITS);
-    return true;
-}
-
-uint8_t Clearing::get_token_count(Token token) const
-{
-    if (static_cast<uint8_t>(token) >= static_cast<uint8_t>(Token::MaxTokenIndex))
-    {
-        return 0;
-    }
-    const TokenInfo &info = TOKEN_FIELD_INFO[static_cast<uint8_t>(token)];
-    return read_bits<uint8_t>(TOKENS_SHIFT + info.offset, info.width);
-}
-
-bool Clearing::set_token_count(Token token, uint8_t count)
-{
-    if (static_cast<uint8_t>(token) >= static_cast<uint8_t>(Token::MaxTokenIndex))
-        return false;
-    const TokenInfo &info = TOKEN_FIELD_INFO[static_cast<uint8_t>(token)];
-    write_bits(count, TOKENS_SHIFT + info.offset, info.width);
-    return true;
-}
-
-uint8_t Clearing::get_pawn_count(FactionID factionID) const
-{
-    if (static_cast<uint8_t>(factionID) >= static_cast<uint8_t>(FactionID::MaxFactionID))
-        return 0;
-    const PawnInfo &info = PAWN_FIELD_INFO[static_cast<uint8_t>(factionID)];
-    uint8_t shift = PAWN_DATA_SHIFT + info.offset;
-    return read_bits<uint8_t>(shift, info.width);
-}
-
-bool Clearing::set_pawn_count(FactionID factionID, uint8_t count)
-{
-    if (static_cast<uint8_t>(factionID) >= static_cast<uint8_t>(FactionID::MaxFactionID))
-        return false;
-    const PawnInfo &info = PAWN_FIELD_INFO[static_cast<uint8_t>(factionID)];
-    uint8_t shift = PAWN_DATA_SHIFT + info.offset;
-    write_bits(count, shift, info.width);
-    return true;
-}
-
-bool Clearing::is_lord_of_the_hundreds_warlord_present() const
-{
-    const PawnInfo &info = PAWN_FIELD_INFO[static_cast<uint8_t>(FactionID::LordOfTheHundreds) + 1];
-    uint8_t shift = PAWN_DATA_SHIFT + info.offset;
-    return read_bits<bool>(shift, info.width);
-}
-
-void Clearing::set_lord_of_the_hundreds_warlord_present(bool present)
-{
-    const PawnInfo &info = PAWN_FIELD_INFO[static_cast<uint8_t>(FactionID::LordOfTheHundreds) + 1];
-    uint8_t shift = PAWN_DATA_SHIFT + info.offset;
-    write_bits(present ? 1 : 0, shift, info.width);
-}
-
-ClearingType Clearing::get_clearing_type() const
-{
-    return read_bits<ClearingType>(CLEARING_TYPE_SHIFT, CLEARING_TYPE_BITS);
-}
-
-void Clearing::set_clearing_type(ClearingType type)
-{
-    write_bits(static_cast<uint8_t>(type), CLEARING_TYPE_SHIFT, CLEARING_TYPE_BITS);
-}
-
-bool Clearing::get_connected_forest(uint8_t index) const
-{
-    uint8_t shift = CONNECTED_FORESTS_SHIFT + index * FOREST_CONNECTION_BITS;
-    return read_bits<bool>(shift, FOREST_CONNECTION_BITS);
-}
-
-void Clearing::set_connected_forest(uint8_t index, bool value)
-{
-    uint8_t shift = CONNECTED_FORESTS_SHIFT + index * FOREST_CONNECTION_BITS;
-    write_bits(value ? 1 : 0, shift, FOREST_CONNECTION_BITS);
-}
-
-bool Clearing::is_razed() const
-{
-    return read_bits<bool>(RAZED_SHIFT, RAZED_BITS);
-}
-
-void Clearing::set_razed(bool value)
-{
-    write_bits(value ? 1 : 0, RAZED_SHIFT, RAZED_BITS);
-}
-
-Landmark Clearing::get_landmark() const
-{
-    return read_bits<Landmark>(LANDMARK_SHIFT, LANDMARK_BITS);
-}
-
-void Clearing::set_landmark(Landmark landmark)
-{
-    write_bits(static_cast<uint8_t>(landmark), LANDMARK_SHIFT, LANDMARK_BITS);
-}
-
-uint8_t Clearing::get_next_empty_building_slot_index(uint8_t starting_index) const
-{
-    for (uint8_t i = starting_index; i < 4; ++i)
-    {
-        if (get_building_slot(i).currentBuilding == Building::NoBuilding)
-        {
-            return i;
-        }
-    }
-    return 255; // No empty slot found
+  }
+  return 255;  // No empty slot found
 }
 
 // --- Forest Implementation ---
 
-Forest::Forest() : data(0) {}
-
 template <typename T>
-T Forest::read_bits(uint8_t shift, uint8_t width) const
-{
-    uint32_t mask = ((1UL << width) - 1) << shift;
-    return static_cast<T>((data & mask) >> shift);
+[[nodiscard]] T Forest::read_bits(uint8_t shift, uint8_t width) const {
+  uint32_t mask = ((1UL << width) - 1) << shift;
+  return static_cast<T>((data & mask) >> shift);
 }
 
-void Forest::write_bits(uint32_t value, uint8_t shift, uint8_t width)
-{
-    uint32_t mask = ((1UL << width) - 1) << shift;
-    data = (data & ~mask) | ((value << shift) & mask);
+void Forest::write_bits(uint32_t value, uint8_t shift, uint8_t width) {
+  uint32_t mask = ((1UL << width) - 1) << shift;
+  data = (data & ~mask) | ((value << shift) & mask);
 }
 
-std::array<Token, (static_cast<uint8_t>(Token::JewelryValue3) - static_cast<uint8_t>(Token::FigureValue1) + 1)> Forest::get_relics() const
-{
-    std::array<Token, static_cast<uint8_t>(Token::JewelryValue3) - static_cast<uint8_t>(Token::FigureValue1) + 1> relics{};
-    for (uint8_t i = static_cast<uint8_t>(Token::FigureValue1); i <= static_cast<uint8_t>(Token::JewelryValue3); ++i)
-    {
-        const TokenInfo &info = TOKEN_FIELD_INFO[i];
-        uint8_t count = read_bits<uint8_t>(RELICS_SHIFT + info.offset, info.width);
-        relics.at(i) = static_cast<Token>(count);
-    }
-    return relics;
+[[nodiscard]] std::array<Token,
+                         (static_cast<uint8_t>(Token::kJewelryValue3) -
+                          static_cast<uint8_t>(Token::kFigureValue1) + 1)>
+Forest::get_relics() const {
+  std::array<Token, static_cast<uint8_t>(Token::kJewelryValue3) -
+                        static_cast<uint8_t>(Token::kFigureValue1) + 1>
+      relics{};
+  for (uint8_t i = static_cast<uint8_t>(Token::kFigureValue1);
+       i <= static_cast<uint8_t>(Token::kJewelryValue3); ++i) {
+    const TokenInfo &info = kTokenFieldInfo[i];
+    uint8_t count = read_bits<uint8_t>(kRelicsShift + info.offset, info.width);
+    relics.at(i) = static_cast<Token>(count);
+  }
+  return relics;
 }
 
-bool Forest::set_relic(Token token, uint8_t count)
-{
-    if (static_cast<uint8_t>(token) < static_cast<uint8_t>(Token::FigureValue1) || static_cast<uint8_t>(token) > static_cast<uint8_t>(Token::JewelryValue3)) {
-        return false;
-    }
-    const TokenInfo &info = TOKEN_FIELD_INFO[static_cast<uint8_t>(token)];
-    write_bits(count, RELICS_SHIFT + info.offset, info.width);
-    return true;
+bool Forest::set_relic(Token token, uint8_t count) {
+  if (static_cast<uint8_t>(token) <
+          static_cast<uint8_t>(Token::kFigureValue1) ||
+      static_cast<uint8_t>(token) >
+          static_cast<uint8_t>(Token::kJewelryValue3)) {
+    return false;
+  }
+  const TokenInfo &info = kTokenFieldInfo[static_cast<uint8_t>(token)];
+  write_bits(count, kRelicsShift + info.offset, info.width);
+  return true;
 }
 
-bool Forest::get_vagabond(uint8_t index) const
-{
-    if (index >= 2) {
-        return false;
-    }
-    uint8_t shift = VAGABONDS_SHIFT + index * VAGABOND_BITS;
-    return read_bits<bool>(shift, VAGABOND_BITS);
+[[nodiscard]] bool Forest::get_vagabond(uint8_t index) const {
+  if (index >= 2) {
+    return false;
+  }
+  uint8_t shift = kVagabondsShift + index * kVagabondBits;
+  return read_bits<bool>(shift, kVagabondBits);
 }
 
-bool Forest::set_vagabond(uint8_t index, bool value)
-{
-    if (index >= 2) {
-        return false;
-    }
-    uint8_t shift = VAGABONDS_SHIFT + index * VAGABOND_BITS;
-    write_bits(value ? 1 : 0, shift, VAGABOND_BITS);
-    return true;
+bool Forest::set_vagabond(uint8_t index, bool value) {
+  if (index >= 2) {
+    return false;
+  }
+  uint8_t shift = kVagabondsShift + index * kVagabondBits;
+  write_bits(value ? 1 : 0, shift, kVagabondBits);
+  return true;
 }
 
-bool Forest::get_connected_clearing(uint8_t index) const
-{
-    if (index >= TOTAL_CLEARINGS) {
-        return false;
-    }
-    uint8_t shift = CONNECTED_CLEARINGS_SHIFT + index * CLEARING_CONNECTION_BITS;
-    return read_bits<bool>(shift, CLEARING_CONNECTION_BITS);
+[[nodiscard]] bool Forest::get_connected_clearing(uint8_t index) const {
+  if (index >= kTotalClearings) {
+    return false;
+  }
+  uint8_t shift = kConnectedClearingsShift + index * kClearingConnectionBits;
+  return read_bits<bool>(shift, kClearingConnectionBits);
 }
 
-bool Forest::set_connected_clearing(uint8_t index, bool value)
-{
-    if (index >= TOTAL_CLEARINGS) {
-        return false;
-    }
-    uint8_t shift = CONNECTED_CLEARINGS_SHIFT + index * CLEARING_CONNECTION_BITS;
-    write_bits(value ? 1 : 0, shift, CLEARING_CONNECTION_BITS);
-    return true;
+bool Forest::set_connected_clearing(uint8_t index, bool value) {
+  if (index >= kTotalClearings) {
+    return false;
+  }
+  uint8_t shift = kConnectedClearingsShift + index * kClearingConnectionBits;
+  write_bits(value ? 1 : 0, shift, kClearingConnectionBits);
+  return true;
 }
 
 // kind suggestions to the compiler

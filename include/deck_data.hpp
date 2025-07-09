@@ -2,5 +2,8 @@
 #include "game_types.hpp"
 #include <array>
 
-extern const std::array<CardID, 54> STANDARD_DECK;
-extern const std::array<CardID, 54> EXILES_AND_PARTISANS_DECK;
+namespace deck_data
+{
+    static constexpr std::array<card_data::CardID, 54> kStandardDeck;
+    static constexpr std::array<card_data::CardID, 54> kExilesAndPartisansDeck;
+}
