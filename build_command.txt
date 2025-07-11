@@ -1,0 +1,1 @@
+clang++ -std=c++23 -Wall -Wextra -Iinclude src/deck_data.cpp src/card_data.cpp src/factions_data.cpp src/clearing_data.cpp src/forest_data.cpp src/token_data.cpp -o rootai

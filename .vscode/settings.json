@@ -66,7 +66,9 @@
         "variant": "cpp",
         "format": "cpp",
         "forward_list": "cpp",
-        "unordered_set": "cpp"
+        "unordered_set": "cpp",
+        "condition_variable": "cpp",
+        "typeindex": "cpp"
     },
     "cSpell.words": [
         "Birdy",
