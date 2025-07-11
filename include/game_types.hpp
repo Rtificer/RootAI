@@ -533,8 +533,10 @@ class FactionData
     62 = Rabbit Dominance
     63 = Bird Dominance
 
-    Hand (108 Bits):
+    Hand (113 Bits):
         6 Bits Per Card times 18 Cards
+        5 Bits for Hand Size
+
 
 
 

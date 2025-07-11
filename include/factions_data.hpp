@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstring>
 #include <bit>
+#include <stdexcept>
 
 namespace faction_data
 {
@@ -37,30 +38,16 @@ namespace faction_data
             // Or, the element type is an enum whose underlying type is uint8_t
             (std::is_enum_v<Clean_t<typename T::value_type>> && std::is_same_v<std::underlying_type_t<Clean_t<typename T::value_type>>, uint8_t>)
         );
-
-    template<typename T>
-    concept IsValidByteArrayOrVector =
-        // Check that T is an std::array or std::vector of some type and size
-        (std::is_same_v<T, std::array<Clean_t<typename T::value_type>, std::tuple_size_v<T>>> && std::tuple_size_v<T> > 0 )|| 
-        (std::is_same_v<T, std::vector<Clean_t<typename T::value_type>>>) &&
-        (
-            // The element type is uint8_t
-            std::is_same_v<Clean_t<typename T::value_type>, uint8_t> ||
-            // Or, the element type is an enum whose underlying type is uint8_t
-            (std::is_enum_v<Clean_t<typename T::value_type>> && std::is_same_v<std::underlying_type_t<Clean_t<typename T::value_type>>, uint8_t>)
-        );
-
     
     template <typename T>
     concept HasPawns = requires {
         { T::kPawnBits } -> std::same_as<uint8_t>;
-        T::kPawnBits > 0;
-    };
+    } && (T::kPawnBits > 0);
 
     template <typename T>
     concept IsVagabond = requires {
-        T::kFactionID == FactionID::kVagabond1 || T::kFactionID == FactionID::kVagabond2;
-    };
+        { T::kFactionID } -> std::same_as<FactionID>;
+    } && (T::kFactionID == FactionID::kVagabond1 || T::kFactionID == FactionID::kVagabond2);
 
     template <IsValidFaction FactionType>
     class Faction
@@ -75,51 +62,58 @@ namespace faction_data
         static constexpr uint8_t kScoreBits = 5;
         static constexpr uint8_t kMaxHandSize = 18;
         static constexpr uint8_t kHandWriteIndexBits = 5;
-        static constexpr uint8_t kHandBits = card_data::kCardIDBits * kMaxHandSize + kHandWriteIndexBits;
+        static constexpr uint8_t kHandContentBits = card_data::kCardIDBits * kMaxHandSize + kHandWriteIndexBits;
+        static constexpr uint8_t kHandSizeBits = 5;
 
         static constexpr uint16_t kScoreOffset = 0;
-        static constexpr uint16_t kHandOffset = kScoreOffset + kHandBits;
-
-        template<IsUnsignedIntegralOrEnum OutputType, uint16_t... Indices>
-        OutputType unroll_bytes(uint8_t byteIndex, std::index_sequence<Indices...>) const;
+        static constexpr uint16_t kHandContentOffset = kScoreOffset + kScoreBits;
+        static constexpr uint16_t kHandSizeOffset = kHandOffset + kHandContentBits;
+        static constexpr uint16_t kPawnOffset = kHandSizeOffset + kHandSizeBits;
 
         template <IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
         [[nodiscard]] OutputType read_bits() const;
         template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
         [[nodiscard]] OutputType read_bits() const;
 
-        template <IsUnsignedIntegralOrEnum InputType>
-        void write_bits(const InputType &value, uint16_t shift, uint16_t width);
-        template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
-        void write_bits(const InputType &value, uint16_t shift, uint8_t element_width);
+        template<IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
+        void write_bits(const InputType &value);
+        template <IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
+        void write_bits(const InputType &value);
         
+        [[nodiscard]] inline ExpandedScore get_score() const;
+        inline void set_score(ExpandedScore newScore);
 
-        [[nodiscard]] std::vector<card_data::CardID> get_cards_in_hand(std::vector<uint8_t> desiredCardIndices);
-        bool set_cards_in_hand(std::vector<std::pair<uint8_t, card_data::CardID>> newIndexCardPairs);
-        bool add_cards_to_hand(std::vector<card_data::CardID> newCards);
-        bool remove_cards_from_hand(std::vector<uint8_t> indices);
+        [[nodiscard]] inline uint8_t get_hand_size() const;
+        inline void set_hand_size(uint8_t newSize);
+        template<uint8_t newSize>
+        inline void set_hand_size();
+        [[nodiscard]] std::vector<card_data::CardID> get_hand_contents() const;
+        void set_hand_contents(const std::vector<card_data::CardID> &newHand);
+        [[nodiscard]] std::vector<card_data::CardID> get_cards_in_hand(const std::vector<uint8_t> &desiredCardIndices) const;
+        void set_cards_in_hand(const std::vector<std::pair<uint8_t, card_data::CardID>> &newIndexCardPairs);
+        void add_cards_to_hand(const std::vector<card_data::CardID> &newCards);
+        void remove_cards_from_hand(const std::vector<uint8_t> &indices);
 
-        [[nodiscard]] uint8_t get_remaining_pawn_count() const requires HasPawns<FactionType>;
-        bool set_remaining_pawn_count(uint8_t newCount) requires HasPawns<FactionType>;
-        
-        [[nodiscard]] ExpandedScore get_score() const;
-        bool set_score(ExpandedScore newScore);
+        [[nodiscard]] inline uint8_t get_remaining_pawn_count() const requires HasPawns<FactionType>;
+        inline void set_remaining_pawn_count(uint8_t newCount) requires HasPawns<FactionType>;
 
-        bool draw_cards(std::array<card_data::CardID, 54> &deck, uint8_t count);
-        bool discard_card_from_hand(uint8_t cardIndex);
-        bool build(Clearing &desiredClearing. Building desiredBuilding);
-        virtual bool battle(uint8_t clearingIndex);
-        virtual bool move(uint8_t originClearingIndex, uint8_t destinationClearingIndex);
-        virtual bool recruit(uint8_t clearingIndex);
+        void draw_cards(std::array<card_data::CardID, 54> &deck, uint8_t &deckSize, uint8_t count);
+        void discard_card_from_hand(uint8_t cardIndex);
+        void build(Clearing &desiredClearing, Building desiredBuilding);
+        virtual void battle(uint8_t clearingIndex);
+        virtual void move(uint8_t originClearingIndex, uint8_t destinationClearingIndex);
+        virtual void recruit(uint8_t clearingIndex);
         virtual uint8_t calculate_extra_draws() = 0;
 
         std::array<uint8_t, 112> factionData;
     };
 
+    template<IsValidFaction FactionType>
     class MarquiseDeCatFaction : public Faction<MarquiseDeCatFaction>
     {
         public:
             static constexpr FactionID kFactionID = FactionID::kMarquiseDeCat;
+            static constexpr uint8_t kPawnBits = 5;
 
             bool place_starting_wood(FactionData &factionData, bool isAI);
             bool craft(bool isAI);
@@ -133,7 +127,8 @@ namespace faction_data
             bool discard_cards(FactionData &factionData, bool isAI);
 
         private:
-            static constexpr uint8_t kPawnBits = 5;
             uint8_t calculate_extra_draws() override;
+
+
     };
 }
