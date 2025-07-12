@@ -77,6 +77,6 @@ private:
 
     std::array<uint8_t, (kConnectedClearingsShift + kConnectedClearingsBits + 7) / 8> data;
 };
-}
-}
-}
+} // forest_data
+} // board_data
+} // game_data

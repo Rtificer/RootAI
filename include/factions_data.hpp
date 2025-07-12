@@ -1,7 +1,9 @@
 #pragma once
 
 #include "card_data.hpp"
+#include "deck_data.hpp"
 #include "clearing_data.hpp"
+#include "game_data.hpp"
 
 #include <array>
 #include <cstdint>
@@ -84,28 +86,8 @@ enum class ExpandedScore : uint8_t
 
 template <typename T>
 concept IsValidFaction = requires {
-    { T::kFactionID } -> std::same_as<FactionID>;
+    { T::kFactionID } -> std::convertible_to<FactionID>;
 };
-
-template<typename T>
-using Clean_t = std::remove_cv_t<std::remove_reference_t<T>>;
-
-template<typename T>
-concept IsUnsignedIntegralOrEnum = std::unsigned_integral<T> || 
-    (std::is_enum_v<T> && std::unsigned_integral<std::underlying_type_t<T>>);
-
-
-// Note: I had problems with template metaprograming when dealing with const so I spammed Clean_t everywhere. Some uses might be unnecessary but idc tbh its good enough
-template<typename T>
-concept IsValidByteArray =
-    // Check that T is an std::array or std::vector of some type and size
-    (std::is_same_v<T, std::array<Clean_t<typename T::value_type>, std::tuple_size_v<T>>> && std::tuple_size_v<T> > 0 ) &&
-    (
-        // The element type is uint8_t
-        std::is_same_v<Clean_t<typename T::value_type>, uint8_t> ||
-        // Or, the element type is an enum whose underlying type is uint8_t
-        (std::is_enum_v<Clean_t<typename T::value_type>> && std::is_same_v<std::underlying_type_t<Clean_t<typename T::value_type>>, uint8_t>)
-    );
 
 template <typename T>
 concept HasPawns = requires {
@@ -114,10 +96,10 @@ concept HasPawns = requires {
 
 template <typename T>
 concept IsVagabond = requires {
-    { T::kFactionID } -> std::same_as<FactionID>;
+    { T::kFactionID } -> std::convertible_to<FactionID>;
 } && (T::kFactionID == FactionID::kVagabond1 || T::kFactionID == FactionID::kVagabond2);
 
-template <IsValidFaction FactionType>
+template <typename FactionType> //CRTP (look up what it stands for its funny)
 class Faction
 {
 public:
@@ -138,14 +120,14 @@ protected:
     static constexpr uint16_t kHandSizeOffset = kHandContentOffset + kHandContentBits;
     static constexpr uint16_t kPawnOffset = kHandSizeOffset + kHandSizeBits;
 
-    template <IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
+    template <::game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
     [[nodiscard]] OutputType read_bits() const;
     template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
     [[nodiscard]] OutputType read_bits() const;
 
-    template<IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
+    template<::game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
     void write_bits(const InputType &value);
-    template <IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
+    template <::game_data::IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
     void write_bits(const InputType &value);
     
     [[nodiscard]] inline ExpandedScore get_score() const;
@@ -165,7 +147,8 @@ protected:
     [[nodiscard]] inline uint8_t get_remaining_pawn_count() const requires HasPawns<FactionType>;
     inline void set_remaining_pawn_count(uint8_t newCount) requires HasPawns<FactionType>;
 
-    void draw_cards(std::array<card_data::CardID, 54> &deck, uint8_t &deckSize, uint8_t count);
+    template <typename DeckType>
+    inline void draw_cards(::game_data::deck_data::Deck<DeckType> &deck, uint8_t count);
     void discard_card_from_hand(uint8_t cardIndex);
     void build(::game_data::board_data::clearing_data::Clearing &desiredClearing, ::game_data::board_data::clearing_data::building_data::Building desiredBuilding);
     virtual void battle(uint8_t clearingIndex);
@@ -176,7 +159,6 @@ protected:
     std::array<uint8_t, 112> factionData;
 };
 
-template<IsValidFaction FactionType>
 class MarquiseDeCatFaction : public Faction<MarquiseDeCatFaction>
 {
     public:
@@ -186,16 +168,17 @@ class MarquiseDeCatFaction : public Faction<MarquiseDeCatFaction>
         bool place_starting_wood(bool isAI);
         bool craft(bool isAI);
         bool take_actions(bool isAI);
-        bool battle(bool isAI);
-        bool march(bool isAI);
-        bool recruit(bool isAI);
-        bool build(bool isAI);
-        bool overwork(bool isAI);
+        bool battle_action(bool isAI);
+        bool march_action(bool isAI);
+        bool recruit_action(bool isAI);
+        bool build_action(bool isAI);
+        bool overwork_action(bool isAI);
         bool draw_cards_end_of_turn(bool isAI);
         bool discard_cards(bool isAI);
 
     private:
         uint8_t calculate_extra_draws();
 };
-}
-}
+static_assert(IsValidFaction<MarquiseDeCatFaction>, "Marquise de cat faction is invalid");
+} // faction_data
+} // game_data

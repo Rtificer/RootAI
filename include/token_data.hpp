@@ -61,5 +61,5 @@ static constexpr TokenInfo kTokenFieldInfo[] = {
     {27, 1}, // Jewelry Value 2
     {28, 2}, // Jewelry Value 3
 };
-}
-}
+} // token_data
+} // game_data

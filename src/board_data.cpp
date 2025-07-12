@@ -2,4 +2,4 @@
 
 namespace board_data
 {
-}
+} // board_data

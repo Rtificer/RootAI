@@ -1,8 +1,14 @@
 #pragma once
 
-#include "factions_data.hpp"
 #include "token_data.hpp"
 #include "board_data.hpp"
+
+// Avoid circular dependency
+namespace game_data {
+namespace faction_data {
+    enum class FactionID : uint8_t;
+}
+}
 
 #include <cstdint>
 #include <array>
@@ -175,8 +181,8 @@ public:
     [[nodiscard]] uint8_t get_token_count(token_data::Token token) const;
     bool set_token_count(token_data::Token token, uint8_t count);
 
-    [[nodiscard]] uint8_t get_pawn_count(::game_data::faction_data::FactionID factionID) const;
-    bool set_pawn_count(::game_data::faction_data::FactionID factionID, uint8_t count);
+    [[nodiscard]] uint8_t get_pawn_count(game_data::faction_data::FactionID factionID) const;
+    bool set_pawn_count(game_data::faction_data::FactionID factionID, uint8_t count);
 
     [[nodiscard]] bool is_lord_of_the_hundreds_warlord_present() const;
     void set_lord_of_the_hundreds_warlord_present(bool present);
@@ -236,6 +242,6 @@ private:
     static constexpr uint8_t kBuildingTypeMask = (1 << kBuildingTypeBits) - 1;
     static constexpr uint8_t kTreetopToggleMask = (1 << kTreetopToggleBits) - 1;
 };
-}
-}
-}
+} // clearing_data
+} // board_data
+} // game_data

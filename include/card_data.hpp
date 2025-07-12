@@ -85,5 +85,5 @@ enum class CardID : uint8_t
     kFaithfulRetainer,
     kNotACard
 };
-}
-}
+} // card_data
+} // game_data

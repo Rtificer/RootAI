@@ -4,7 +4,7 @@ namespace game_data
 {
 namespace faction_data
 {
-template <IsValidFaction FactionType>
+template <typename FactionType>
 template <IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
 [[nodiscard]] OutputType Faction<FactionType>::read_bits() const
 {
@@ -70,7 +70,7 @@ template <IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
     return value;
 }
 
-template <IsValidFaction FactionType>
+template <typename FactionType>
 template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
 [[nodiscard]] OutputType Faction<FactionType>::read_bits() const
 {
@@ -134,8 +134,8 @@ template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
     return value;
 };
 
-template<IsValidFaction FactionType>
-template<IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
+template <typename FactionType>
+template <IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
 void Faction<FactionType>::write_bits(const InputType &value) {
     static_assert(width > 0, "Width cannot be zero");
     static_assert(width <= sizeof(InputType) * 8, "Width exceeds output type bit capacity");
@@ -205,7 +205,7 @@ void Faction<FactionType>::write_bits(const InputType &value) {
     }
 }
 
-template <IsValidFaction FactionType>
+template <typename FactionType>
 template <IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
 void Faction<FactionType>::write_bits(const InputType &value) {
     static_assert(elementWidth > 0, "Element width cannot be zero");
@@ -256,23 +256,23 @@ void Faction<FactionType>::write_bits(const InputType &value) {
     }
 };
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 [[nodiscard]] inline ExpandedScore Faction<FactionType>::get_score() const {
     return read_bits<ExpandedScore, kScoreOffset, kScoreBits>();
 }
 
-template <IsValidFaction FactionType>
+template <typename FactionType>
 inline void Faction<FactionType>::set_score(ExpandedScore newScore) {
     write_bits<ExpandedScore, kScoreOffset, kScoreBits>(newScore);
 }
 
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 [[nodiscard]] inline uint8_t Faction<FactionType>::get_hand_size() const {
     return read_bits<uint8_t, kHandSizeOffset, kHandSizeBits>();
 }
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 inline void Faction<FactionType>::set_hand_size(uint8_t newSize) {
     [[unlikely]] if (newSize > kMaxHandSize) {
         throw std::invalid_argument("New hand size cannot exceed maximum hand size");
@@ -281,32 +281,32 @@ inline void Faction<FactionType>::set_hand_size(uint8_t newSize) {
     write_bits<uint8_t, kHandSizeOffset, kHandSizeBits>(newSize);
 }
 
-template<IsValidFaction FactionType>
-template<uint8_t newSize>
+template <typename FactionType>
+template <uint8_t newSize>
 inline void Faction<FactionType>::set_hand_size() {
     static_assert(newSize <= kMaxHandSize, "New hand size cannot exceed maximum hand size");
     
     write_bits<uint8_t, kHandSizeOffset, kHandSizeBits>(newSize);
 }
 
-template<IsValidFaction FactionType>
-[[nodiscard]] std::vector<card_data::CardID> Faction<FactionType>::get_hand_contents() const {
+template <typename FactionType>
+[[nodiscard]] std::vector<::game_data::card_data::CardID> Faction<FactionType>::get_hand_contents() const {
     const uint8_t handSize = get_hand_size();
     if (handSize == 0) {
         return {};
     } else if (handSize == 1) {
         // Fast path for a single card
-        return {read_bits<card_data::CardID, kHandContentOffset, card_data::kCardIDBits>()};
+        return {read_bits<::game_data::card_data::CardID, kHandContentOffset, ::game_data::card_data::kCardIDBits>()};
     } else if (handSize <= kMaxHandSize) {
-        std::vector<card_data::CardID> result;
+        std::vector<::game_data::card_data::CardID> result;
         // Compile-time dispatch for all possible hand sizes
         auto dispatch = [&](auto... Ns) {
             bool handled = false;
             ((handSize == Ns ?
                 ([&] {
                     constexpr size_t N = decltype(Ns)::value;
-                    std::array<card_data::CardID, N> tempArray =
-                        read_bits<std::array<card_data::CardID, N>, kHandContentOffset, card_data::kCardIDBits>();
+                    std::array<::game_data::card_data::CardID, N> tempArray =
+                        read_bits<std::array<::game_data::card_data::CardID, N>, kHandContentOffset, ::game_data::card_data::kCardIDBits>();
                     result.assign(tempArray.begin(), tempArray.end());
                     handled = true;
                 }(), void()) : void()), ...);
@@ -321,13 +321,13 @@ template<IsValidFaction FactionType>
     }
 };
 
-template<IsValidFaction FactionType>
-void Faction<FactionType>::set_hand_contents(const std::vector<card_data::CardID> &newHand) {
+template <typename FactionType>
+void Faction<FactionType>::set_hand_contents(const std::vector<::game_data::card_data::CardID> &newHand) {
     // Helper lambda to write N cards to hand and set the hand size at compile time
     auto set_hand_universal = [&](auto N) {
-        std::array<card_data::CardID, N> tempArray{};
+        std::array<::game_data::card_data::CardID, N> tempArray{};
         std::copy_n(newHand.begin(), N, tempArray.begin());
-        write_bits<std::array<card_data::CardID, N>, kHandContentOffset, card_data::kCardIDBits>(tempArray);
+        write_bits<std::array<::game_data::card_data::CardID, N>, kHandContentOffset, ::game_data::card_data::kCardIDBits>(tempArray);
         set_hand_size<N>();
     };
 
@@ -337,7 +337,7 @@ void Faction<FactionType>::set_hand_contents(const std::vector<card_data::CardID
         set_hand_size<0>();
     } else if (newHandSize == 1) {
         // Fast path for a single card
-        write_bits<card_data::CardID, kHandContentOffset, card_data::kCardIDBits>(newHand[0]);
+        write_bits<::game_data::card_data::CardID, kHandContentOffset, ::game_data::card_data::kCardIDBits>(newHand[0]);
         set_hand_size<1>();
     } else if (newHandSize <= kMaxHandSize) {
         // Use a compile-time unrolled dispatch to handle all possible hand sizes
@@ -362,35 +362,35 @@ void Faction<FactionType>::set_hand_contents(const std::vector<card_data::CardID
     }
 }
 
-template<IsValidFaction FactionType>
-[[nodiscard]] std::vector<card_data::CardID> Faction<FactionType>::get_cards_in_hand(const std::vector<uint8_t> &desiredCardIndices) const {
+template <typename FactionType>
+[[nodiscard]] std::vector<::game_data::card_data::CardID> Faction<FactionType>::get_cards_in_hand(const std::vector<uint8_t> &desiredCardIndices) const {
     [[unlikely]] if (std::any_of(desiredCardIndices.begin(), desiredCardIndices.end(),
-                                    [](uint8_t index)
-                                    { return index >= kMaxHandSize; }))
+        [](uint8_t index)
+        { return index >= kMaxHandSize; }))
     {
         throw std::invalid_argument("Desired card index exceeded maximum card index");
     }
 
-    std::vector<card_data::CardID> result;
+    std::vector<::game_data::card_data::CardID> result;
     result.reserve(desiredCardIndices.size());
     for (uint8_t i = 0; i < desiredCardIndices.size(); ++i) {
-        result.push_back(read_bits<card_data::CardID, i * card_data::kCardIDBits + kHandContentOffset, card_data::kCardIDBits>());
+        result.push_back(read_bits<::game_data::card_data::CardID, i * ::game_data::card_data::kCardIDBits + kHandContentOffset, ::game_data::card_data::kCardIDBits>());
     }
     return result;
 }
 
-template<IsValidFaction FactionType>
-void Faction<FactionType>::set_cards_in_hand(const std::vector<std::pair<uint8_t, card_data::CardID>> &newIndexCardPairs) {
+template <typename FactionType>
+void Faction<FactionType>::set_cards_in_hand(const std::vector<std::pair<uint8_t, ::game_data::card_data::CardID>> &newIndexCardPairs) {
     [[unlikely]] if (std::any_of(newIndexCardPairs.begin(), newIndexCardPairs.end(),
-                                    [](const std::pair<uint8_t, card_data::CardID> &pair)
-                                    { return pair.first >= kMaxHandSize; }))
+        [](const std::pair<uint8_t, ::game_data::card_data::CardID> &pair)
+        { return pair.first >= kMaxHandSize; }))
     {
         throw std::invalid_argument("Desired card index exceeded maximum card index");
     }
 
     [[unlikely]] if (std::any_of(newIndexCardPairs.begin(), newIndexCardPairs.end(),
-                                    [](const std::pair<uint8_t, card_data::CardID> &pair)
-                                    { return pair.second == card_data::CardID::kNotACard; }))
+        [](const std::pair<uint8_t, ::game_data::card_data::CardID> &pair)
+        { return pair.second == ::game_data::card_data::CardID::kNotACard; }))
     {
         throw std::invalid_argument("Attempted to Set Invalid card");
     }
@@ -401,40 +401,40 @@ void Faction<FactionType>::set_cards_in_hand(const std::vector<std::pair<uint8_t
         if (newIndexCardPairs[i].first > highestIndex)
             highestIndex = newIndexCardPairs[i].first;
 
-        write_bits<card_data::CardID, newIndexCardPairs[i].first * card_data::kCardIDBits + kHandContentOffset, card_data::kCardIDBits>(newIndexCardPairs[i].second);
+        write_bits<::game_data::card_data::CardID, newIndexCardPairs[i].first * ::game_data::card_data::kCardIDBits + kHandContentOffset, ::game_data::card_data::kCardIDBits>(newIndexCardPairs[i].second);
     }
 
     set_hand_size<highestIndex + 1>();
 }
 
-template<IsValidFaction FactionType>
-void Faction<FactionType>::add_cards_to_hand(const std::vector<card_data::CardID> &newCards) {
+template <typename FactionType>
+void Faction<FactionType>::add_cards_to_hand(const std::vector<::game_data::card_data::CardID> &newCards) {
     const uint8_t newCardsCount = newCards.size();
     const uint8_t oldHandSize = get_hand_size();
     [[unlikely]] if (newCardsCount + oldHandSize > kMaxHandSize)
         throw std::invalid_argument("Attempted to add cards above the hand size limit");
 
     [[unlikely]] if (std::any_of(newCards.begin(), newCards.end(),
-                                    [](card_data::CardID card)
-                                    { return card == card_data::CardID::kNotACard; }))
+        [](::game_data::card_data::CardID card)
+        { return card == ::game_data::card_data::CardID::kNotACard; }))
     {
         throw std::invalid_argument("Attempted to Set Invalid card");
     }
 
     auto add_cards_universal = [&](auto N) {
-        std::array<card_data::CardID, N> tempArray{};
+        std::array<::game_data::card_data::CardID, N> tempArray{};
         std::copy_n(newCards.begin(), N, tempArray.begin());
-        write_bits<std::array<card_data::CardID, N>,
-            oldHandSize * card_data::kCardIDBits + kHandContentOffset, card_data::kCardIDBits>(tempArray);
+        write_bits<std::array<::game_data::card_data::CardID, N>,
+            oldHandSize * ::game_data::card_data::kCardIDBits + kHandContentOffset, ::game_data::card_data::kCardIDBits>(tempArray);
         set_hand_size<oldHandSize + N>();
     };
 
     if (newCardsCount == 1)
     {
-        write_bits<card_data::CardID, card_data::kCardIDBits * oldHandSize + kHandContentOffset, card_data::kCardIDBits>(newCards[0]);
+        write_bits<::game_data::card_data::CardID, ::game_data::card_data::kCardIDBits * oldHandSize + kHandContentOffset, ::game_data::card_data::kCardIDBits>(newCards[0]);
         set_hand_size<oldHandSize + 1>();
     }
-    else if (newCardsCount <= kMaxHandSize)
+    else [[likely]] if (newCardsCount <= kMaxHandSize)
     {
         // Use a compile-time unrolled dispatch to handle all possible newCardsCount values
         auto dispatch = [&](auto... Ns)
@@ -455,27 +455,27 @@ void Faction<FactionType>::add_cards_to_hand(const std::vector<card_data::CardID
         // Generate the sequence [0, 1, ..., kMaxHandSize] at compile time and call dispatch with it
         dispatch(std::make_integer_sequence<size_t, kMaxHandSize + 1>{});
     }
-    [[unlikely]] else
+    else
     {
         throw std::invalid_argument("Attempted to add zero cards to hand");
     }
 }
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 void Faction<FactionType>::remove_cards_from_hand(const std::vector<uint8_t> &indices) {
     // Get the current hand size
     const uint8_t currentHandSize = get_hand_size();
 
     // Validate that all indices are within bounds
     [[unlikely]] if (std::any_of(indices.begin(), indices.end(),
-                                [currentHandSize](uint8_t index)
-                                { return index >= currentHandSize; }))
+        [currentHandSize](uint8_t index)
+        { return index >= currentHandSize; }))
     {
         throw std::invalid_argument("Attempted to Set Invalid card");
     }
 
     // Get the current hand contents
-    std::vector<card_data::CardID> handContentsVector = get_hand_contents();
+    std::vector<::game_data::card_data::CardID> handContentsVector = get_hand_contents();
 
     // Create a mask to mark which indices should be removed
     std::vector<bool> removeMask(currentHandSize, false);
@@ -484,7 +484,7 @@ void Faction<FactionType>::remove_cards_from_hand(const std::vector<uint8_t> &in
     }
 
     // Build the new hand by skipping cards marked for removal
-    std::vector<card_data::CardID> newHand;
+    std::vector<::game_data::card_data::CardID> newHand;
     newHand.reserve(currentHandSize - indices.size());
     for (uint8_t i = 0; i < currentHandSize; ++i) {
         if (!removeMask[i])
@@ -494,19 +494,23 @@ void Faction<FactionType>::remove_cards_from_hand(const std::vector<uint8_t> &in
     set_hand_contents(newHand);
 }
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 [[nodiscard]] inline uint8_t Faction<FactionType>::get_remaining_pawn_count() const requires HasPawns<FactionType> {
-    return read_bits<uint8_t, kPawnOffset, Faction<FactionType>::kPawnBits>();
+    return read_bits<uint8_t, kPawnOffset, FactionType::kPawnBits>();
 }
 
-template<IsValidFaction FactionType>
+template <typename FactionType>
 inline void Faction<FactionType>::set_remaining_pawn_count(uint8_t newCount) requires HasPawns<FactionType> {
-    write_bits<uint8_t, kPawnOffset, Faction<FactionType>::kPawnBits>(newCount);
+    write_bits<uint8_t, kPawnOffset, FactionType::kPawnBits>(newCount);
 }
 
-// template<IsValidFaction FactionType>
-// void Faction<FactionType>::draw_cards(std::array<card_data::CardID, 54> &deck, uint8_t &deckSize, uint8_t count) {
-    
-// }
+template <typename FactionType>
+template <typename DeckType>
+inline void Faction<FactionType>::draw_cards(::game_data::deck_data::Deck<DeckType> &deck, uint8_t count)
+{
+    std::vector<::game_data::card_data::CardID> newCards = deck.get_cards_in_deck(0, count - 1);
+    add_cards_to_hand(newCards);
+
 }
-}
+} // faction_data
+} // game_data

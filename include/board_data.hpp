@@ -8,5 +8,5 @@ namespace board_data
 {
     static constexpr uint8_t kTotalClearings = 12;
     static constexpr uint8_t kTotalForests = 12;
-}
-}
+} // board_data
+} // game_data
