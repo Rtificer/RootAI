@@ -7,6 +7,7 @@ namespace game_data
 namespace card_data
 {
 static constexpr uint8_t kCardIDBits = 6;
+static constexpr uint8_t kTotalCards = 54;
 
 enum class CardID : uint8_t
 {

@@ -8,16 +8,17 @@
 #include <vector>
 #include <concepts>
 #include <stdexcept>
+#include <algorithm>
+#include <cstring>
 
 namespace game_data
 {
 namespace deck_data
 {
-    static constexpr uint8_t kMaxDeckSize = 54;
 
 template <typename T>
 concept IsValidDeck = requires {
-    { T::kStartingCards } -> std::same_as<std::array<::game_data::card_data::CardID, kMaxDeckSize>>;
+    { T::kStartingCards } -> std::same_as<std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards>>;
 };
 
 template<IsValidDeck DeckType>
@@ -38,6 +39,7 @@ class Deck {
         [[nodiscard]] inline uint8_t get_deck_size() const;
         template <uint8_t newSize>
         inline void set_deck_size();
+        inline void set_deck_size(uint8_t newSize);
 
         [[nodiscard]] std::vector<::game_data::card_data::CardID> get_deck_contents() const;
         void set_deck_contents(const std::vector<::game_data::card_data::CardID> &newDeck);
@@ -50,12 +52,12 @@ class Deck {
 
     protected:
         static constexpr uint8_t kDeckSizeBits = 6;
-        static constexpr uint16_t kDeckContentBits = kMaxDeckSize * ::game_data::card_data::kCardIDBits;
+        static constexpr uint16_t kDeckContentBits = ::game_data::card_data::kTotalCards * ::game_data::card_data::kCardIDBits;
 
         static constexpr uint16_t kDeckSizeOffset = 0;
         static constexpr uint16_t kDeckContentOffset = kDeckSizeOffset + kDeckSizeBits;
 
-        using DeckData = std::array<uint8_t, (7 + kDeckSizeBits + card_data::kCardIDBits * kMaxDeckSize) / 8>;
+        using DeckData = std::array<uint8_t, (7 + kDeckSizeBits + card_data::kCardIDBits * ::game_data::card_data::kTotalCards) / 8>;
 
         // Super unoptimized but its compile time and I don't care that much.
         static constexpr DeckData initialize_deck();
@@ -67,7 +69,7 @@ class Deck {
 template<IsValidDeck DeckType>
 class StandardDeck : public Deck<DeckType> {
     public:
-        static constexpr std::array<::game_data::card_data::CardID, kMaxDeckSize> kStartingCards = {
+        static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kStartingCards = {
             // Dominance
             ::game_data::card_data::CardID::kMouseDominance,
             ::game_data::card_data::CardID::kFoxDominance,
@@ -135,7 +137,7 @@ class StandardDeck : public Deck<DeckType> {
 template<IsValidDeck DeckType>
 class ExilesAndPartisansDeck : public Deck<DeckType> {
     private:
-        static constexpr std::array<::game_data::card_data::CardID, kMaxDeckSize> kStartingCards = {
+        static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kStartingCards = {
             // Dominance
             ::game_data::card_data::CardID::kMouseDominance,
             ::game_data::card_data::CardID::kFoxDominance,

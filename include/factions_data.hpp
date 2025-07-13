@@ -122,20 +122,28 @@ protected:
 
     template <::game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
     [[nodiscard]] OutputType read_bits() const;
+    template <::game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t width>
+    [[nodiscard]] OutputType read_bits(uint16_t shift) const;
     template <IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
     [[nodiscard]] OutputType read_bits() const;
+    template <::game_data::IsValidByteArray OutputType, uint8_t elementWidth>
+    [[nodiscard]] OutputType read_bits(uint16_t shift) const;
 
-    template<::game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
+    template <::game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
     void write_bits(const InputType &value);
+    template <::game_data::IsUnsignedIntegralOrEnum InputType, uint16_t width>
+    void write_bits(const InputType &value, uint16_t shift);
     template <::game_data::IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
     void write_bits(const InputType &value);
+    template <::game_data::IsValidByteArray InputType, uint8_t elementWidth>
+    void write_bits(const InputType, uint16_t shift);
     
     [[nodiscard]] inline ExpandedScore get_score() const;
     inline void set_score(ExpandedScore newScore);
 
     [[nodiscard]] inline uint8_t get_hand_size() const;
     inline void set_hand_size(uint8_t newSize);
-    template<uint8_t newSize>
+    template <uint8_t newSize>
     inline void set_hand_size();
     [[nodiscard]] std::vector<card_data::CardID> get_hand_contents() const;
     void set_hand_contents(const std::vector<card_data::CardID> &newHand);
