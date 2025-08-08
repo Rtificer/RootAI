@@ -68,7 +68,19 @@
         "forward_list": "cpp",
         "unordered_set": "cpp",
         "condition_variable": "cpp",
-        "typeindex": "cpp"
+        "typeindex": "cpp",
+        "expected": "cpp",
+        "__bit_reference": "cpp",
+        "__locale": "cpp",
+        "__threading_support": "cpp",
+        "__verbose_abort": "cpp",
+        "ios": "cpp",
+        "locale": "cpp",
+        "print": "cpp",
+        "__node_handle": "cpp",
+        "ranges": "cpp",
+        "__config": "cpp",
+        "__split_buffer": "cpp"
     },
     "cSpell.words": [
         "Birdy",
@@ -78,4 +90,7 @@
         "Foxfolk",
         "Riverfolk"
     ],
+    "C_Cpp.default.compilerPath": "/usr/bin/clang++-18",
+    "C_Cpp.intelliSenseEngine": "default",
+
 }

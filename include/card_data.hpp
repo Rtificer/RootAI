@@ -84,7 +84,6 @@ enum class CardID : uint8_t
     // Faction Specific
     kLoyalVizier,
     kFaithfulRetainer,
-    kNotACard
 };
 } // card_data
 } // game_data

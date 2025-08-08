@@ -1,75 +1,42 @@
 #pragma once
 
+#include "card_pile.hpp"
 #include "card_data.hpp"
-#include "game_data.hpp"
 
 #include <array>
 #include <cstdint>
-#include <vector>
-#include <concepts>
-#include <stdexcept>
-#include <algorithm>
-#include <cstring>
+
+
 
 namespace game_data
 {
 namespace deck_data
 {
 
-template <typename T>
-concept IsValidDeck = requires {
-    { T::kStartingCards } -> std::same_as<std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards>>;
+enum class DeckType
+{
+    kStandard,
+    kExilesAndPartisans
 };
 
-template<IsValidDeck DeckType>
-class Deck {
-    public:
-        template<::game_data::IsUint8OrEnumUint8 OutputType, uint16_t shift, uint8_t width>
-        [[nodiscard]] OutputType read_bits() const;
-        template<::game_data::IsValidByteArray OutputType, uint16_t shift, uint8_t elementWidth>
-        [[nodiscard]] OutputType read_bits() const;
-
-        template<::game_data::IsUint8OrEnumUint8 InputType, uint16_t shift, uint16_t width>
-        void write_bits(const InputType &value);
-        template<::game_data::IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
-        void write_bits(const InputType &value);
-
-
-    
-        [[nodiscard]] inline uint8_t get_deck_size() const;
-        template <uint8_t newSize>
-        inline void set_deck_size();
-        inline void set_deck_size(uint8_t newSize);
-
-        [[nodiscard]] std::vector<::game_data::card_data::CardID> get_deck_contents() const;
-        void set_deck_contents(const std::vector<::game_data::card_data::CardID> &newDeck);
-        [[nodiscard]] std::vector<::game_data::card_data::CardID> get_cards_in_deck(const std::vector<uint8_t> &desiredCardIndices) const;
-        [[nodiscard]] std::vector<::game_data::card_data::CardID> get_cards_in_deck(uint8_t startIndex, uint8_t endIndex) const;
-        void set_cards_in_deck(const std::vector<std::pair<uint8_t, ::game_data::card_data::CardID>> &newIndexCardPairs);
-        void add_cards_to_deck(const std::vector<::game_data::card_data::CardID> &newCards);
-        void remove_cards_from_deck(const std::vector<uint8_t> &indices);
-        inline void pop_cards_from_deck(uint8_t popCardCount);
-
+template <DeckType deckType>
+class Deck : public ::game_data::pile_data::CardPile
+{
     protected:
-        static constexpr uint8_t kDeckSizeBits = 6;
-        static constexpr uint16_t kDeckContentBits = ::game_data::card_data::kTotalCards * ::game_data::card_data::kCardIDBits;
+        Deck() : CardPile() {
+            // Apparently using this-> is good practice here or something
+            this->pileData = this->initialize_pile();
+        }
 
-        static constexpr uint16_t kDeckSizeOffset = 0;
-        static constexpr uint16_t kDeckContentOffset = kDeckSizeOffset + kDeckSizeBits;
+            template <size_t Bit, size_t Max>
+            consteval void set_deck_size_bits(CardPileData& data, uint16_t& bitPos) const;
+            
+            template <size_t CardIdx, size_t Max>
+            consteval void set_card_ids(CardPileData& data, uint16_t& bitPos) const;
 
-        using DeckData = std::array<uint8_t, (7 + kDeckSizeBits + card_data::kCardIDBits * ::game_data::card_data::kTotalCards) / 8>;
+            consteval CardPileData initialize_pile() const override; 
 
-        // Super unoptimized but its compile time and I don't care that much.
-        static constexpr DeckData initialize_deck();
-        typename Deck<DeckType>::DeckData deckData = initialize_deck();
-
-        
-};
-
-template<IsValidDeck DeckType>
-class StandardDeck : public Deck<DeckType> {
-    public:
-        static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kStartingCards = {
+            static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kStandardStartingCards = {
             // Dominance
             ::game_data::card_data::CardID::kMouseDominance,
             ::game_data::card_data::CardID::kFoxDominance,
@@ -132,12 +99,8 @@ class StandardDeck : public Deck<DeckType> {
             ::game_data::card_data::CardID::kSappers,
             ::game_data::card_data::CardID::kSappers
         };
-};
 
-template<IsValidDeck DeckType>
-class ExilesAndPartisansDeck : public Deck<DeckType> {
-    private:
-        static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kStartingCards = {
+        static constexpr std::array<::game_data::card_data::CardID, ::game_data::card_data::kTotalCards> kExilesAndPartisansStartingCards = {
             // Dominance
             ::game_data::card_data::CardID::kMouseDominance,
             ::game_data::card_data::CardID::kFoxDominance,
@@ -200,6 +163,7 @@ class ExilesAndPartisansDeck : public Deck<DeckType> {
             ::game_data::card_data::CardID::kSaboteurs,
             ::game_data::card_data::CardID::kSoupKitchens
         };
+
 };
 } // deck_data
 } // game_data
