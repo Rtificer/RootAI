@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.10)
 project(RootAI VERSION 0.1.0 LANGUAGES CXX)
 
 find_package(fmt 9.0.0 REQUIRED)
+find_path(RANDOM123_INCLUDE_DIR Random123/threefry.h)
 
 add_executable(RootAI
     main.cpp
@@ -20,7 +21,6 @@ add_executable(RootAI
 
 target_include_directories(RootAI PRIVATE
     ${PROJECT_SOURCE_DIR}/include
-    ${PROJECT_BINARY_DIR}
 )
 
 target_compile_features(RootAI PRIVATE cxx_std_23)
@@ -32,3 +32,4 @@ target_compile_options(RootAI PRIVATE
 )
 
 target_link_libraries(RootAI PRIVATE fmt::fmt)
+target_include_directories(RootAI PRIVATE ${RANDOM123_INCLUDE_DIR})

@@ -9,7 +9,7 @@ namespace discard_pile_data
 
 class DiscardPile : public ::game_data::pile_data::CardPile
 {
-    
+
 };
 }
 }

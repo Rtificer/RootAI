@@ -28,6 +28,7 @@
             "clearingType": "random",
             "clearingConnections": [
                 {"index": 1, "type": "blocked"},
+                {"index": 5, "type": "water"},
                 {"index": 6, "type": "normal"},
                 {"index": 8, "type": "normal"}
             ],

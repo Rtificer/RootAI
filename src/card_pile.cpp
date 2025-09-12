@@ -6,10 +6,13 @@ namespace pile_data {
 [[nodiscard]] inline std::expected<uint8_t, PileError> CardPile::get_pile_size() const
 {
     static_assert(kPileSizeBits > 0 && kPileSizeBits < 9, "Invalid kPileSizeBits value");
-    const std::expected<uint8_t, PileError> size = read_bits<uint8_t, kPileSizeOffset, kPileSizeBits>();
-    [[unlikely]] if (size.value() > card_data::kTotalCards)
+
+    const uint8_t size = read_bits<uint8_t, kPileSizeOffset, kPileSizeBits>();
+
+    [[unlikely]] if (size > card_data::kTotalCards)
         return std::unexpected(PileError{PileError::Code::kPileSizeExceededTotalItems});
-    return size;
+
+    return std::expected<uint8_t, PileError>{size};
 }
 
 template <uint8_t newSize>
@@ -17,6 +20,10 @@ inline void CardPile::set_pile_size()
 {
     static_assert(kPileSizeBits > 0 && kPileSizeBits < 9, "Invalid kPileSizeBits value");
     static_assert(newSize <= card_data::kTotalCards, "Card pile size cannot be greater than the quantity of cards");
+
+    if constexpr (newSize == 0)
+        this->on_pile_empty();
+
     write_bits<uint8_t, kPileSizeOffset, kPileSizeBits>(newSize);
 }
 
@@ -25,6 +32,7 @@ inline std::expected<void, PileError> CardPile::set_pile_size(uint8_t newSize)
     static_assert(kPileSizeBits > 0 && kPileSizeBits < 9, "Invalid kPileSizeBits value");
     [[unlikely]] if (newSize > card_data::kTotalCards)
         return std::unexpected(PileError{PileError::Code::kNewPileSizeExceededTotalItems});
+        
     write_bits<uint8_t, kPileSizeOffset, kPileSizeBits>(newSize);
     return {};
 }
@@ -43,48 +51,33 @@ inline std::expected<void, PileError> CardPile::set_pile_size(uint8_t newSize)
         return std::expected<std::vector<card_data::CardID>, PileError>(
             std::vector<card_data::CardID>{read_bits<card_data::CardID, kPileContentOffset, card_data::kCardIDBits>()});
 
-    std::expected<std::vector<card_data::CardID>, PileError> result;
-    result.value().reserve(pileSize.value());
-    auto dispatch = [this, pileSize, &result]<size_t... Ns>(std::index_sequence<Ns...>) {
-        (((pileSize.value() == (Ns + 2)) ?
-            ([this, &result] {
-                constexpr size_t N = Ns + 2;
-                std::array<card_data::CardID, N> tempArray = read_bits<std::array<card_data::CardID, N>, kPileContentOffset, card_data::kCardIDBits>();
-                result.value().assign(tempArray.begin(), tempArray.end());
-            }(), void()) : void()), ...);
-    };
-    dispatch(std::make_index_sequence<card_data::kTotalCards - 1>{});
-    return result;
+    return read_bits<std::vector<card_data::CardID>, kPileContentOffset, card_data::kCardIDBits>(pileSize.value())
+        .transform_error([](game_data::ReadWriteError error)
+            { return PileError{static_cast<PileError::Code>(error.code)}; });
 }
 
 std::expected<void, PileError> CardPile::set_pile_contents(const std::vector<card_data::CardID> &newPile)
 {
     const uint8_t newPileSize = newPile.size();
+
     [[unlikely]] if (newPileSize == 0) {
         set_pile_size<0>();
         return {};
     }
+
     [[unlikely]] if (newPileSize == 1) {
         write_bits<card_data::CardID, kPileContentOffset, card_data::kCardIDBits>(newPile[0]);
         set_pile_size<1>();
         return {};
     }
-    auto dispatch = [this, newPileSize, &newPile]<size_t... Ns>(std::index_sequence<Ns...>) -> std::expected<void, PileError> {
-        bool handled = false;
-        (((newPileSize == (Ns + 2)) ?
-            ([this, &newPile, &handled] {
-                constexpr size_t N = Ns + 2;
-                std::array<card_data::CardID, N> tempArray{};
-                std::copy_n(newPile.begin(), N, tempArray.begin());
-                write_bits<std::array<card_data::CardID, N>, kPileContentOffset, card_data::kCardIDBits>(tempArray);
-                set_pile_size<N>();
-                handled = true;
-            }(), void()) : void()), ...);
-        [[unlikely]] if (handled == false)
-            return std::unexpected(PileError{PileError::Code::kNewPileSizeExceededTotalItems});
-        return {};
-    };
-    return dispatch(std::make_index_sequence<card_data::kTotalCards - 1>{});
+
+    const std::expected<void, PileError> result = set_pile_size(newPileSize);
+    [[unlikely]] if (!result.has_value())
+        return result;
+
+    return write_bits<std::vector<card_data::CardID>, kPileContentOffset, card_data::kCardIDBits>(newPileSize, newPile)
+        .transform_error([](game_data::ReadWriteError error)
+            { return PileError{static_cast<PileError::Code>(error.code)}; });
 }
 
 [[nodiscard]] std::expected<std::vector<card_data::CardID>, PileError> CardPile::get_cards_in_pile(const std::vector<uint8_t> &desiredCardIndices) const
@@ -94,30 +87,28 @@ std::expected<void, PileError> CardPile::set_pile_contents(const std::vector<car
     [[unlikely]] if (desiredCardIndices.empty())
         return std::unexpected(PileError{PileError::Code::kGetZeroItems});
 
-    const auto pileSize = get_pile_size();
-    [[unlikely]] if (!pileSize.has_value())
-        return std::unexpected(pileSize.error());
+    const std::expected<std::vector<card_data::CardID>, PileError> pileContents = get_pile_contents();
+    [[unlikely]] if (!pileContents.has_value())
+        return pileContents;
+
+    const uint8_t pileSize = pileContents.value().size();
 
     std::bitset<card_data::kTotalCards> seen;
-    std::expected<std::vector<card_data::CardID>, PileError> result;
-    result.value().reserve(desiredCardIndices.size());
-    for (uint8_t index : desiredCardIndices) {
-        [[unlikely]] if (index >= pileSize.value())
+    std::vector<card_data::CardID> result;
+    result.reserve(desiredCardIndices.size());
+    for (const uint8_t& index : desiredCardIndices) {
+        [[unlikely]] if (index >= pileSize)
             return std::unexpected(PileError{PileError::Code::kIndexExceededCurrentPileSize});
 
         [[unlikely]] if (seen.test(index))
-            return std::unexpected (PileError{PileError::Code::kDuplicateIndices});
+            return std::unexpected(PileError{PileError::Code::kDuplicateIndices});
 
         seen.set(index);
-        auto dispatch = [this, index, &result]<size_t... Ns>(std::index_sequence<Ns...>) {
-            (((index == Ns) ?
-                ([this, &result] {
-                    result.value().push_back(read_bits<card_data::CardID, Ns * card_data::kCardIDBits + kPileContentOffset, card_data::kCardIDBits>());
-                }(), void()) : void()), ...);
-        };
-        dispatch(std::make_index_sequence<card_data::kTotalCards>{});
+
+        result.push_back(pileContents.value()[index]);
     }
-    return result;
+
+    return std::expected<std::vector<card_data::CardID>, PileError>{result};
 }
 
 [[nodiscard]] std::expected<std::vector<card_data::CardID>, PileError> CardPile::get_cards_in_pile(uint8_t startIndex, uint8_t endIndex) const
@@ -125,38 +116,57 @@ std::expected<void, PileError> CardPile::set_pile_contents(const std::vector<car
     const auto pileSize = get_pile_size();
     [[unlikely]] if (!pileSize.has_value())
         return std::unexpected(pileSize.error());
+
     [[unlikely]] if (startIndex >=pileSize.value() || endIndex >= pileSize.value())
         return std::unexpected(PileError{PileError::Code::kIndexExceededCurrentPileSize});
+
     [[unlikely]] if (startIndex >= endIndex)
         return std::unexpected(PileError{PileError::Code::kStartIndexMustNotExceedEndIndex});
+        
     const uint8_t totalIndices = endIndex - startIndex;
-    std::expected<std::vector<card_data::CardID>, PileError> result;
-    auto dispatch = [this, totalIndices, startIndex, &result]<size_t... Ns>(std::index_sequence<Ns...>) {
-        (((totalIndices == (Ns + 1)) ?
-            ([this, startIndex, &result] {
-                constexpr size_t N = Ns + 1;
-                std::array<card_data::CardID, N> tempArray =
-                    read_bits<std::array<card_data::CardID, N>, card_data::kCardIDBits>(kPileContentOffset + startIndex * card_data::kCardIDBits);
-                result.value().assign(tempArray.begin(), tempArray.end());
-            }(), void()) : void()), ...);
-    };
-    dispatch(std::make_index_sequence<card_data::kTotalCards>{});
-    return result;
+    return read_bits<std::vector<card_data::CardID>, card_data::kCardIDBits>(totalIndices, kPileContentOffset + startIndex * card_data::kCardIDBits)
+        .transform_error([](game_data::ReadWriteError error)
+            { return PileError{static_cast<PileError::Code>(error.code)}; });
 }
 
 std::expected<void, PileError> CardPile::set_cards_in_pile(const std::vector<IndexCardPair> &newIndexCardPairs)
 {
     static_assert(card_data::kCardIDBits > 0 && card_data::kCardIDBits <= 8, "Invalid kCardIDBits Value");
 
-    [[unlikely]] if (newIndexCardPairs.empty())
+    const uint8_t totalNewCards = newIndexCardPairs.size();
+
+    [[unlikely]] if (totalNewCards == 0)
         return std::unexpected(PileError{PileError::Code::kSetZeroItems});
 
-    const auto pileSize = get_pile_size();
-    [[unlikely]] if (!pileSize.has_value())
-        return std::unexpected(pileSize.error());
 
     std::bitset<card_data::kTotalCards> seen;
+    static constexpr uint8_t kBuildEditThreshold = 5;
+    if (totalNewCards >= kBuildEditThreshold) {
+        auto pileContentsResult = get_pile_contents();
+        [[unlikely]] if (!pileContentsResult.has_value())
+            return std::unexpected(pileContentsResult.error());
+
+        auto& pileContents = pileContentsResult.value();
+        const auto pileSize = pileContents.size();
+
+        std::bitset<card_data::kTotalCards> seen;
+        for (const auto& pair : newIndexCardPairs) {
+            [[unlikely]] if (pair.index >= pileSize)
+                return std::unexpected(PileError{PileError::Code::kIndexExceededCurrentPileSize});
+            [[unlikely]] if (seen.test(pair.index))
+                return std::unexpected(PileError{PileError::Code::kDuplicateIndices});
+            seen.set(pair.index);
+            pileContents[pair.index] = pair.cardID;
+        }
+
+        return set_pile_contents(pileContents);
+    }
+
     for (const auto& pair : newIndexCardPairs) {
+        const auto pileSize = get_pile_size();
+        [[unlikely]] if (!pileSize.has_value())
+            return std::unexpected(pileSize.error());
+
         [[unlikely]] if (pair.index >= pileSize.value())
             return std::unexpected(PileError{PileError::Code::kIndexExceededCurrentPileSize});
 
@@ -164,10 +174,13 @@ std::expected<void, PileError> CardPile::set_cards_in_pile(const std::vector<Ind
             return std::unexpected(PileError{PileError::Code::kDuplicateIndices});
 
         seen.set(pair.index);
-        write_bits<card_data::CardID, card_data::kCardIDBits>(
-            pair.cardID, 
-            pair.index * card_data::kCardIDBits + kPileContentOffset
-        );
+        
+        const std::expected<void, PileError> result = write_bits<card_data::CardID, card_data::kCardIDBits>(pair.cardID, pair.index * card_data::kCardIDBits + kPileContentOffset)
+            .transform_error([](game_data::ReadWriteError error)
+                { return PileError{static_cast<PileError::Code>(error.code)}; });
+
+        [[unlikely]] if (!result.has_value())
+            return result;
     }
     return {};
 }
@@ -182,42 +195,25 @@ std::expected<void, PileError> CardPile::add_cards_to_pile(const std::vector<car
     [[unlikely]] if (!oldPileSize.has_value())
         return std::unexpected(oldPileSize.error());
 
+    std::expected<void, PileError> setPileSizeResult = set_pile_size(oldPileSize.value() + newCardsCount);
+    [[unlikely]] if (!setPileSizeResult.has_value())
+        return setPileSizeResult;
 
-    std::optional<PileError::Code> optErrorCode;
     const uint16_t offset = card_data::kCardIDBits * oldPileSize.value() + kPileContentOffset;
     if (newCardsCount == 1)
-    {
-        const auto result = set_pile_size(oldPileSize.value() + 1);
-        [[likely]] if (result.has_value())
-            { write_bits<card_data::CardID, card_data::kCardIDBits>(newCards[0], offset); }
-        else
-             { optErrorCode = result.error().code; };
-    } else {
-        auto count_dispatch = [this, newCardsCount, &newCards, oldPileSize, &optErrorCode]<size_t... Ns>(std::index_sequence<Ns...>)
-        {
-            (((newCardsCount == (Ns + 2)) ? ([this, &newCards, oldPileSize, &optErrorCode] {
-                constexpr size_t N = Ns + 1;
-                const auto result = set_pile_size(oldPileSize.value() + N);
-                [[likely]] if (result.has_value()) {
-                    const uint16_t offset = card_data::kCardIDBits * oldPileSize.value() + kPileContentOffset;
-                    std::array<card_data::CardID, N> tempArray{};
-                    std::copy_n(newCards.begin(), N, tempArray.begin());
-                    write_bits<std::array<card_data::CardID, N>, card_data::kCardIDBits>(tempArray, offset);
-                } else { optErrorCode = result.error().code; }
-            }(), void()) : void()), ...);
-        };
-        count_dispatch(std::make_index_sequence<card_data::kTotalCards - 1>{});
-    }
+        return write_bits<card_data::CardID, card_data::kCardIDBits>(newCards[0], offset)
+            .transform_error([](game_data::ReadWriteError error)
+                { return PileError{static_cast<PileError::Code>(error.code)}; });
 
-    [[unlikely]] if (optErrorCode.has_value())
-        return std::unexpected(PileError{optErrorCode.value()});
-
-    return {};
+    return write_bits<std::vector<card_data::CardID>, card_data::kCardIDBits>(newCardsCount, newCards, offset)
+        .transform_error([](game_data::ReadWriteError error)
+            { return PileError{static_cast<PileError::Code>(error.code)}; });
 }
 
 std::expected<void, PileError> CardPile::remove_cards_from_pile(const std::vector<uint8_t> &indices)
 {
-    [[unlikely]] if (indices.empty())
+    const uint8_t removalCount = indices.size();
+    [[unlikely]] if (removalCount == 0)
         return std::unexpected(PileError{PileError::Code::kRemoveZeroItems});
 
     const auto oldPileContentsVector = get_pile_contents();
@@ -225,7 +221,7 @@ std::expected<void, PileError> CardPile::remove_cards_from_pile(const std::vecto
         return std::unexpected(oldPileContentsVector.error());
 
     const uint8_t oldSize = oldPileContentsVector.value().size();
-    [[unlikely]] if (indices.size() > oldSize)
+    [[unlikely]] if (removalCount > oldSize)
         return std::unexpected(PileError{PileError::Code::kPileSizeUnderflow});
 
     std::vector<uint8_t> sortedIndices = indices;
@@ -254,8 +250,10 @@ inline std::expected<void, PileError> CardPile::pop_cards_from_pile(uint8_t coun
     auto oldSizeResult = get_pile_size();
     [[unlikely]] if (!oldSizeResult.has_value())
         return std::unexpected(oldSizeResult.error());
+
     [[unlikely]] if (oldSizeResult.value() < count)
         return std::unexpected(PileError{PileError::Code::kPileSizeUnderflow});
+        
     return set_pile_size(oldSizeResult.value() - count);
 }
 

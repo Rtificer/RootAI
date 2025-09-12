@@ -34,7 +34,7 @@ consteval void Deck<deckType>::set_card_ids(CardPileData& data, uint16_t& bitPos
 }
 
 template <DeckType deckType>
-consteval Deck<deckType>::CardPileData Deck<deckType>::initialize_pile() const
+[[nodiscard]] consteval Deck<deckType>::CardPileData Deck<deckType>::initialize_pile() const
 {
     CardPileData data{};
     uint16_t bitPos = 0;
@@ -42,5 +42,44 @@ consteval Deck<deckType>::CardPileData Deck<deckType>::initialize_pile() const
     set_card_ids<0, card_data::kTotalCards>(data, bitPos);
     return data;
 }
+
+template <DeckType deckType>
+[[nodiscard]] consteval std::expected<void, pile_data::PileError> Deck<deckType>::shuffle()
+{
+    r123::Threefry2x32_R<12> rng;
+    const auto fetchResult = get_pile_contents();
+    [[unlikely]] if (!fetchResult)
+        return std::unexpected(fetchResult.error);
+
+    auto& pile = fetchResult.value();
+
+    for (uint8_t i = pile.size() - 1; i > 0; --i) {
+        ++ctr[0];
+        auto rand = rng(ctr, key);
+        const uint8_t r = rand[0] % (i + 1);
+
+        std::swap(pile[i], pile[r]);       
+    }
+
+    return set_pile_contents(pile);
+}
+
+template <DeckType deckType>
+[[nodiscard]] inline consteval std::expected<void, pile_data::PileError> Deck<deckType>::turnover_discard(discard_pile_data::DiscardPile &discardPile) 
+{
+    auto getDiscardResult = discardPile.get_pile_contents();
+    [[unlikely]] if (!getDiscardResult)
+        return std::unexpected(getDiscardResult.error());
+
+    auto& contents = getDiscardResult.value();
+
+    auto deckSetResult = set_pile_contents(contents);
+    if (!deckSetResult)
+        return std::unexpected(deckSetResult.error());
+
+    return discardPile.set_pile_size(0);
+}
+
+
 } // deck_data
 } // game_data

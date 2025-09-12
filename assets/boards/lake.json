@@ -4,7 +4,9 @@
             "clearingType": "random",
             "clearingConnections": [
                 {"index": 2, "type": "normal"},
-                {"index": 3, "type": "normal"}
+                {"index": 3, "type": "normal"},
+                {"index": 5, "type": "normal"},
+                {"index": 6, "type": "normal"}
             ],
             "totalClearingConnections": 2,
             "forestConnections": [1, 2, 3],

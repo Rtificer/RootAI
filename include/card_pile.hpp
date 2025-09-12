@@ -90,9 +90,11 @@ protected:
     static constexpr uint16_t kPileSizeOffset = 0;
     static constexpr uint16_t kPileContentOffset = kPileSizeOffset + kPileSizeBits;
 
-    using CardPileData = std::array<uint8_t, (7 + kPileSizeBits + card_data::kCardIDBits * card_data::kTotalCards) / 8>;
+    using CardPileData = std::array<uint8_t, (kPileSizeBits + card_data::kCardIDBits * card_data::kTotalCards + 7) / 8>;
 
     CardPileData pileData;
+    
+    inline void on_pile_empty() {}; // CRTP
 
     virtual consteval CardPileData initialize_pile() const = 0;
 
@@ -103,7 +105,7 @@ protected:
     }
 
     template <game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t width>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(pileData), width>(pileData, shift);
     }
 
@@ -112,9 +114,19 @@ protected:
         return game_data::read_bits<OutputType, sizeof(pileData), shift, elementWidth>(pileData);
     }
 
+    template <game_data::IsValidByteVector OutputType, uint16_t shift, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t outputSize) const {
+        return game_data::read_bits<OutputType, sizeof(pileData), shift, elementWidth>(pileData, outputSize);
+    }
+
     template <game_data::IsValidByteArray OutputType, uint8_t elementWidth>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(pileData), elementWidth>(pileData, shift);
+    }
+
+    template <game_data::IsValidByteVector OutputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t outputSize, uint16_t shift) const {
+        return game_data::read_bits<OutputType, sizeof(pileData), elementWidth>(pileData, outputSize, shift);
     }
 
     template <game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
@@ -123,8 +135,8 @@ protected:
     }
 
     template <game_data::IsUnsignedIntegralOrEnum InputType, uint16_t width>
-    inline void write_bits(const InputType &value, uint16_t shift) {
-        game_data::write_bits<InputType, sizeof(pileData), width>(pileData, value, shift);
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(pileData), width>(pileData, value, shift);
     }
 
     template <game_data::IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
@@ -132,11 +144,20 @@ protected:
         game_data::write_bits<InputType, sizeof(pileData), shift, elementWidth>(pileData, value);
     }
 
+    template <game_data::IsValidByteVector InputType, uint16_t shift, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value) {
+       return game_data::write_bits<InputType, sizeof(pileData), shift, elementWidth>(pileData, outputSize, value);
+    }
+
     template <game_data::IsValidByteArray InputType, uint8_t elementWidth>
-    inline void write_bits(const InputType &value, uint16_t shift) {
-        game_data::write_bits<InputType, sizeof(pileData), elementWidth>(pileData, value, shift);
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(pileData), elementWidth>(pileData, value, shift);
+    }
+
+    template <game_data::IsValidByteVector InputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(pileData), elementWidth>(pileData, outputSize, value, shift);
     }
 };
-
 } // namespace pile_data
 } // namespace game_data

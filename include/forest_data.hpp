@@ -1,7 +1,6 @@
 #pragma once
 
 #include "token_data.hpp"
-#include "board_data.hpp"
 #include "game_data.hpp"
 
 #include <cstdint>
@@ -40,13 +39,13 @@ struct RelicError {
         "Unknown error"
     };
 
-    static std::string_view to_string(Code code) {
+    static std::string_view to_string(Code code)  {
         uint8_t idx = static_cast<uint8_t>(code);
         if (idx < kMessages.size()) return kMessages[idx];
         return kMessages.back();
     }
 
-    std::string_view message() const { return to_string(code); }
+    std::string_view message() const  { return to_string(code); }
 };
 
 class Forest
@@ -122,17 +121,10 @@ private:
     static constexpr uint8_t kTotalVagabonds = 2;
     static constexpr uint8_t kVagabondsBits = kVagabondBits * kTotalVagabonds;
 
-    static constexpr uint8_t kConnectedClearingsCountBits = 3;
-    static constexpr uint8_t kClearingConnectionBits = 4;
-    static constexpr uint8_t kMaxClearingConnections = 6;
-    static constexpr uint8_t kConnectedClearingsBits = kClearingConnectionBits * kMaxClearingConnections;
-
     static constexpr uint8_t kRelicsOffset = 0;
     static constexpr uint8_t kVagabondsOffset = kRelicsOffset + kRelicsBits;
-    static constexpr uint8_t kConnectedClearingsCountOffset = kVagabondsOffset + kVagabondsBits;
-    static constexpr uint8_t kConnectedClearingOffset = kConnectedClearingsCountOffset + kConnectedClearingsCountBits;
 
-    std::array<uint8_t, (kConnectedClearingOffset + kConnectedClearingsBits + 7) / 8> forestData;
+    std::array<uint8_t, (kVagabondsOffset + kVagabondBits + 7) / 8> forestData;
 
     // Wrappers for read and write bits functions to allow for ease of use
     template <game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
@@ -141,7 +133,7 @@ private:
     }
 
     template <game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t width>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(forestData), width>(forestData, shift);
     }
 
@@ -150,9 +142,19 @@ private:
         return game_data::read_bits<OutputType, sizeof(forestData), shift, elementWidth>(forestData);
     }
 
+    template <game_data::IsValidByteVector OutputType, uint16_t shift, uint8_t elementWidth>
+    [[nodiscard]] inline OutputType read_bits(uint16_t outputSize) const {
+        return game_data::read_bits<OutputType, sizeof(forestData), shift, elementWidth>(forestData, outputSize);
+    }
+
     template <game_data::IsValidByteArray OutputType, uint8_t elementWidth>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(forestData), elementWidth>(forestData, shift);
+    }
+
+    template <game_data::IsValidByteVector OutputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t outputSize, uint16_t shift) const {
+        return game_data::read_bits<OutputType, sizeof(forestData), elementWidth>(forestData, outputSize, shift);
     }
 
     template <game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
@@ -170,38 +172,19 @@ private:
         game_data::write_bits<InputType, sizeof(forestData), shift, elementWidth>(forestData, value);
     }
 
+    template <game_data::IsValidByteVector InputType, uint16_t shift, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value) {
+        return game_data::write_bits<InputType, sizeof(forestData), shift, elementWidth>(forestData, outputSize, value);
+    }
+
     template <game_data::IsValidByteArray InputType, uint8_t elementWidth>
     inline void write_bits(const InputType &value, uint16_t shift) {
         game_data::write_bits<InputType, sizeof(forestData), elementWidth>(forestData, value, shift);
     }
 
-    [[nodiscard]] inline std::expected<uint8_t, ConnectionError> get_clearing_connection_count() {
-        return board_data::get_basic_connection_count<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, sizeof(forestData)>(forestData);
-    }
-
-    template <uint8_t newCount>
-    inline void set_clearing_connection_count() {
-        return board_data::set_basic_connection_count<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, sizeof(forestData), newCount>(forestData);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> set_clearing_connection_count(uint8_t newCount) {
-        return board_data::set_basic_connection_count<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, sizeof(forestData)>(forestData, newCount);
-    }
-
-    [[nodiscard]] inline std::expected<std::vector<uint8_t>, ConnectionError> get_clearing_connections() {
-        return board_data::get_basic_connections<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, kClearingConnectionBits, kConnectedClearingOffset, sizeof(forestData)>(forestData);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> set_clearing_connections(const std::vector<uint8_t> &newConnections) {
-        return board_data::set_basic_connections<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, kClearingConnectionBits, kConnectedClearingOffset, sizeof(forestData)>(forestData, newConnections);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> add_clearing_connections(const std::vector<uint8_t> &newConnections) {
-        return board_data::add_basic_connections<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, kClearingConnectionBits, kConnectedClearingOffset, sizeof(forestData)>(forestData, newConnections);
-    }
-
-    [[nodiscard]] std::expected<void, ConnectionError> remove_clearing_connections(const std::vector<uint8_t> &indices) {
-        return board_data::remove_basic_connections<kConnectedClearingsCountBits, kConnectedClearingsCountOffset, kMaxClearingConnections, kClearingConnectionBits, kConnectedClearingOffset, sizeof(forestData)>(forestData, indices);
+    template <game_data::IsValidByteVector InputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(forestData), elementWidth>(forestData, outputSize, value, shift);
     }
 };
 } // forest_data

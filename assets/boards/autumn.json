@@ -148,7 +148,7 @@
                 {"index": 10, "type": "normal"}
             ],
             "totalClearingConnections": 2,
-            "forestConnections": [12],
+            "forestConnections": [7],
             "totalForestConnections": 1,
             "startingLandmarks": []
         }

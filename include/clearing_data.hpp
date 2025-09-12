@@ -1,7 +1,6 @@
 #pragma once
 
 #include "token_data.hpp"
-#include "board_data.hpp"
 #include "game_data.hpp"
 
 #include <cstdint>
@@ -11,6 +10,7 @@
 #include <algorithm>
 #include <expected>
 #include <bitset>
+#include "Random123/threefry.h"
 
 namespace game_data 
 {
@@ -56,6 +56,8 @@ struct IndexBuildingPair
 
 struct BuildingError {
     enum class Code : uint8_t {
+        kNotEnoughDataRead,
+        kNotEnoughDataWrite,
         kOccupiedExceededMaximumSlotCount,
         kOccupiedExceededCurrentSlotCount,
         kNewOccupiedCountExceededMaximumSlotCount,
@@ -76,7 +78,9 @@ struct BuildingError {
         kUnknownError
     } code;
 
-    static constexpr std::array<std::string_view, 18> kMessages = {
+    static constexpr std::array<std::string_view, 20> kMessages = {
+        "Not enough data to read requested bits",
+        "Not enough data to write requested bits",
         "Occupied slot count exceeded maximum slot count",
         "Occupied slot count exceeded current slot count",
         "New occupied slot count exceeded maximum slot count",
@@ -111,23 +115,28 @@ namespace landmark_data
 {
 enum class Landmark : uint8_t
 {
+    kNone,
     kBlackMarket,
     kFerry,
     kLegendaryForge,
     kLostCity,
-    kTower,
+    kTower
 };
 static constexpr uint8_t kTotalLandmarks = 5;
 
 struct LandmarkError {
     enum class Code : uint8_t {
+        kNotEnoughDataRead,
+        kNotEnoughDataWrite,
         kNewLandmarkCountExceedsMaxLandmarks,
         kDuplicateLandmarks,
         kSetZeroLandmarks,
         kUnknownError
     } code;
 
-    static constexpr std::array<std::string_view, 4> kMessages = {
+    static constexpr std::array<std::string_view, 6> kMessages = {
+        "Not enough data to read requested bits",
+        "Not enough data to write requested bits",
         "New landmark count exceeds maximum landmarks as defined by kLandmarkBits",
         "Duplicate landmarks cannot be passed as function args",
         "Cannot set zero landmarks",
@@ -150,27 +159,13 @@ struct LandmarkStatusPair
 };
 }
 
-enum class ClearingConnectionType : uint8_t
-{
-    kNoConnection,
-    kNormal,
-    kByWater,
-    kBlocked,
-    kMaxConnectionIndex // for bounds checking
-};
-
-struct ClearingConnection
-{
-    uint8_t clearingIndex;
-    ClearingConnectionType connectionType;
-};
-
 enum class ClearingType : uint8_t
 {
-    kNone,
+    kRandom,
     kMouse,
     kFox,
     kRabbit,
+    kNone
 };
 
 enum class ElderTreetopIndex : uint8_t
@@ -188,12 +183,16 @@ enum class ElderTreetopIndex : uint8_t
 
 struct TokenError {
     enum class Code : uint8_t {
+        kNotEnoughDataRead,
+        kNotEnoughDataWrite,
         kCountExceededMaximumCount,
         kNewCountExceededMaximumCount,
         kUnknownError
     } code;
 
-    static constexpr std::array<std::string_view, 3> kMessages = {
+    static constexpr std::array<std::string_view, 5> kMessages = {
+        "Not enough data to read requested bits",
+        "Not enough data to write requested bits",
         "Token count exceeded maximum token count of that type",
         "New token count exceeded maximum token count of that type",
         "Unknown error"
@@ -210,12 +209,16 @@ struct TokenError {
 
 struct PawnError {
     enum class Code : uint8_t {
+        kNotEnoughDataRead,
+        kNotEnoughDataWrite,
         kCountExceededMaximumCount,
         kNewCountExceededMaximumCount,
         kUnknownError
     } code;
 
-    static constexpr std::array<std::string_view, 3> kMessages = {
+    static constexpr std::array<std::string_view, 5> kMessages = {
+        "Not enough data to read requested bits",
+        "Not enough data to write requested bits",
         "Pawn count exceeded maximum pawn count of that faction",
         "New pawn count exceeded maximum pawn count of that faction",
         "Unknown error"
@@ -231,6 +234,7 @@ struct PawnError {
 };
 
 
+template<ClearingType clearingTypeValue, uint8_t initialSlotCount, bool hasRuinInitially>
 class Clearing
 {
     /*
@@ -335,25 +339,39 @@ class Clearing
     }
     */
 public:
-    // Clearing (
-    //     const std::vector<ClearingConnection> &clearingConnections, 
-    //     const std::vector<uint8_t> &forestConnections
-    // )
-    // {
-    //     set_clearing_connections(clearingConnections);
-    //     set_forest_connections(forestConnections);
-    // };
 
-    [[nodiscard]] inline std::expected<uint8_t, board_data::ConnectionError> get_clearing_connection_count() const;
-    template <uint8_t newCount>
-    void set_clearing_connection_count();
-    inline std::expected<void, board_data::ConnectionError> set_clearing_connection_count(uint8_t newCount);
+    constexpr Clearing(r123::Threefry2x32_R<12>::ctr_type &ctr, const r123::Threefry2x32_R<12>::key_type &key)
+        : clearingType([&ctr, &key]{
+            if constexpr (clearingTypeValue == ClearingType::kRandom) {
+                r123::Threefry2x32_R<12> rng;
+                const auto rand = rng(ctr, key);
+                return static_cast<ClearingType>(rand[0] % 4);
+            }
+            return clearingTypeValue;
+        }()),
+        clearingData([this]{
+            static_assert(initialSlotCount <= initialSlotCount, "initialSlotCount must not exceed kMaxBuildingSlotCount");
+            static_assert(kBuildingSlotCountBits > 0 && kBuildingSlotCountBits <= 8, "Invalid kBuildingSlotCountBits value");
+            static_assert(kOccupiedBuildingSlotCountBits > 0 && kOccupiedBuildingSlotCountBits <= 8, "Invalid kOccupiedSlotCountBits value");
 
-    [[nodiscard]] std::expected<std::vector<ClearingConnection> , board_data::ConnectionError> get_clearing_connections() const;
-    [[nodiscard]] std::expected<std::vector<uint8_t> , board_data::ConnectionError> get_clearing_connections(ClearingConnectionType connectionType) const;
-    std::expected<void, board_data::ConnectionError> set_clearing_connections(const std::vector<ClearingConnection> &newClearingConnections);
-    std::expected<void, board_data::ConnectionError> add_clearing_connections(const std::vector <ClearingConnection> &newClearingConnections);
-    std::expected<void, board_data::ConnectionError> remove_clearing_connections(const std::vector<uint8_t> &indices);
+            using Building = building_data::Building;
+            using enum Building;
+            static_assert(static_cast<std::underlying_type_t<Building>>(kRuin) == 0, "kRuin must be equal to 0");
+
+            static constexpr size_t dataSize = (kLandMarkOffset + kLandmarkBits + 7) / 8;
+            std::array<uint8_t, dataSize> temp{};
+
+            game_data::write_bits_compile_time<uint8_t, dataSize, kBuildingSlotCountOffset, kBuildingSlotCountBits>(temp, initialSlotCount);
+            
+            //Set occupied count to 1, which sets a ruin bc/ the 0 = ruin, and temp is value-initialized to 0
+            if constexpr (hasRuinInitially)
+                game_data::write_bits_compile_time<uint8_t, dataSize, kOccupiedBuildingSlotCountOffset, kOccupiedBuildingSlotCountBits>(temp, 1);
+
+            return temp;
+        }())
+    {}
+
+    ClearingType clearingType;
 
     [[nodiscard]] inline std::expected<uint8_t, building_data::BuildingError> get_slot_count() const;
     [[nodiscard]] inline std::expected<uint8_t, building_data::BuildingError> get_occupied_slot_count() const;
@@ -395,30 +413,14 @@ public:
     template<faction_data::FactionID factionID, bool isWarlordPresent>
     inline std::expected<void, PawnError> set_pawn_count(uint8_t newCount);
 
-    [[nodiscard]] inline ClearingType get_clearing_type() const;
-    inline void set_clearing_type(ClearingType newType);
-
     [[nodiscard]] inline bool is_razed() const;
     inline void set_is_razed(bool newStatus);
 
     [[nodiscard]] std::vector<landmark_data::Landmark> get_landmarks() const;
-    [[nodiscard]] inline bool is_landmark_present(landmark_data::Landmark desiredLandmark) const;
+    [[nodiscard]] inline std::expected<bool, landmark_data::LandmarkError> is_landmark_present(landmark_data::Landmark desiredLandmark) const;
     std::expected<void, landmark_data::LandmarkError> set_landmarks(const std::vector<landmark_data::LandmarkStatusPair> &newLandmarkStatusPairs);
     std::expected<void, landmark_data::LandmarkError> set_landmarks(const std::vector<landmark_data::Landmark> &newLandmarks);
 private:
-
-    static constexpr uint8_t kMaxClearingConnections = 6;
-    static constexpr uint8_t kConnectedClearingsCountBits = 3;
-    static constexpr uint8_t kClearingConnectionTypeBits = 2;
-    static constexpr uint8_t kClearingConnectionIndexBits = 4;
-    static constexpr uint8_t kClearingConnectionBits = kClearingConnectionIndexBits + kClearingConnectionTypeBits;
-    // Laid out as index, connectiontype, index, connectiontype, etc.
-    static constexpr uint8_t kConnectedClearingsBits = kClearingConnectionBits * kMaxClearingConnections;
-
-    static constexpr uint8_t kMaxForestConnections = 6;
-    static constexpr uint8_t kConnectedForestsCountBits = 3;
-    static constexpr uint8_t kForestConnectionIndexBits = 4;
-    static constexpr uint8_t kConnectedForestsBits = kForestConnectionIndexBits * kMaxForestConnections;
 
     static constexpr uint8_t kMaxBuildingSlotCount = 4;
     static constexpr uint8_t kBuildingSlotCountBits = 3;
@@ -486,26 +488,20 @@ private:
 
     static constexpr uint8_t kPawnDataBits = kPawnDataInfoField.back().offset + kPawnDataInfoField.back().width;
 
-    static constexpr uint8_t kClearingTypeBits = 2;
     static constexpr uint8_t kRazedBits = 1;
     static constexpr uint8_t kLandmarkBits = 5;
 
-    static constexpr uint8_t kConnectedClearingsCountOffset = 0;
-    static constexpr uint8_t kConnectedClearingsOffset = kConnectedClearingsCountOffset + kConnectedClearingsCountBits;
-    static constexpr uint8_t kConnectedForestsCountOffset = kConnectedClearingsOffset + kConnectedClearingsBits;
-    static constexpr uint8_t kConnectedForestsOffset = kConnectedForestsCountOffset + kConnectedForestsCountBits;
-    static constexpr uint8_t kBuildingSlotCountOffset = kConnectedForestsOffset + kConnectedForestsBits;
-    static constexpr uint8_t kOccupiedBuildingSlotCountOffset = kBuildingSlotCountOffset + kBuildingSlotCountBits;
-    static constexpr uint8_t kBuildingSlotsOffset = kOccupiedBuildingSlotCountOffset + kOccupiedBuildingSlotCountBits;
-    static constexpr uint8_t kTreetopIndexOffset = kBuildingSlotsOffset + kBuildingSlotsBits;
-    static constexpr uint8_t kTokenDataOffset = kTreetopIndexOffset + kTreetopIndexBits;
-    static constexpr uint8_t kHiddenPlotToggleOffset = kTokenDataOffset + kTokenDataBits;
-    static constexpr uint8_t kPawnDataOffset = kHiddenPlotToggleOffset + kHiddenPlotToggleBits;
-    static constexpr uint8_t kClearingTypeOffset = kPawnDataOffset + kPawnDataBits;
-    static constexpr uint8_t kRazedOffset = kClearingTypeOffset + kClearingTypeBits;
-    static constexpr uint8_t kLandMarkOffset = kRazedOffset + kRazedBits;
+    static constexpr uint16_t kBuildingSlotCountOffset = 0;
+    static constexpr uint16_t kOccupiedBuildingSlotCountOffset = kBuildingSlotCountOffset + kBuildingSlotCountBits;
+    static constexpr uint16_t kBuildingSlotsOffset = kOccupiedBuildingSlotCountOffset + kOccupiedBuildingSlotCountBits;
+    static constexpr uint16_t kTreetopIndexOffset = kBuildingSlotsOffset + kBuildingSlotsBits;
+    static constexpr uint16_t kTokenDataOffset = kTreetopIndexOffset + kTreetopIndexBits;
+    static constexpr uint16_t kHiddenPlotToggleOffset = kTokenDataOffset + kTokenDataBits;
+    static constexpr uint16_t kPawnDataOffset = kHiddenPlotToggleOffset + kHiddenPlotToggleBits;
+    static constexpr uint16_t kRazedOffset = kPawnDataOffset + kPawnDataBits;
+    static constexpr uint16_t kLandMarkOffset = kRazedOffset + kRazedBits;
 
-    std::array<uint8_t, 23> clearingData{};
+    std::array<uint8_t, (kLandMarkOffset + kLandmarkBits + 7) / 8> clearingData;
 
     // Wrappers for read and write bits functions to allow for ease of use
     template <game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t shift, uint16_t width>
@@ -514,7 +510,7 @@ private:
     }
 
     template <game_data::IsUnsignedIntegralOrEnum OutputType, uint16_t width>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(clearingData), width>(clearingData, shift);
     }
 
@@ -523,9 +519,19 @@ private:
         return game_data::read_bits<OutputType, sizeof(clearingData), shift, elementWidth>(clearingData);
     }
 
+    template <game_data::IsValidByteVector OutputType, uint16_t shift, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t outputSize) const {
+        return game_data::read_bits<OutputType, sizeof(clearingData), shift, elementWidth>(clearingData, outputSize);
+    }
+
     template <game_data::IsValidByteArray OutputType, uint8_t elementWidth>
-    [[nodiscard]] inline OutputType read_bits(uint16_t shift) const {
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t shift) const {
         return game_data::read_bits<OutputType, sizeof(clearingData), elementWidth>(clearingData, shift);
+    }
+
+    template <game_data::IsValidByteVector OutputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<OutputType, game_data::ReadWriteError> read_bits(uint16_t outputSize, uint16_t shift) const {
+        return game_data::read_bits<OutputType, sizeof(clearingData), elementWidth>(clearingData, outputSize, shift);
     }
 
     template <game_data::IsUnsignedIntegralOrEnum InputType, uint16_t shift, uint16_t width>
@@ -534,8 +540,8 @@ private:
     }
 
     template <game_data::IsUnsignedIntegralOrEnum InputType, uint16_t width>
-    inline void write_bits(const InputType &value, uint16_t shift) {
-        game_data::write_bits<InputType, sizeof(clearingData), width>(clearingData, value, shift);
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(clearingData), width>(clearingData, value, shift);
     }
 
     template <game_data::IsValidByteArray InputType, uint16_t shift, uint8_t elementWidth>
@@ -543,49 +549,21 @@ private:
         game_data::write_bits<InputType, sizeof(clearingData), shift, elementWidth>(clearingData, value);
     }
 
+    template <game_data::IsValidByteVector InputType, uint16_t shift, uint8_t elementWidth>
+    inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value) {
+        return game_data::write_bits<InputType, sizeof(clearingData), shift, elementWidth>(clearingData, outputSize, value);
+    }
+
     template <game_data::IsValidByteArray InputType, uint8_t elementWidth>
-    inline void write_bits(const InputType &value, uint16_t shift) {
-        game_data::write_bits<InputType, sizeof(clearingData), elementWidth>(clearingData, value, shift);
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(clearingData), elementWidth>(clearingData, value, shift);
     }
 
-    [[nodiscard]] inline std::expected<uint8_t, ConnectionError> get_forest_connection_count() {
-        return board_data::get_basic_connection_count<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, sizeof(clearingData)>(clearingData);
+    template <game_data::IsValidByteVector InputType, uint8_t elementWidth>
+    [[nodiscard]] inline std::expected<void, game_data::ReadWriteError> write_bits(uint16_t outputSize, const InputType &value, uint16_t shift) {
+        return game_data::write_bits<InputType, sizeof(clearingData), elementWidth>(clearingData, outputSize, value, shift);
     }
-
-    template <uint8_t newCount>
-    inline void set_forest_connection_count() {
-        return board_data::set_basic_connection_count<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, sizeof(clearingData), newCount>(clearingData);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> set_forest_connection_count(uint8_t newCount) {
-        return board_data::set_basic_connection_count<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, sizeof(clearingData)>(clearingData, newCount);
-    }
-
-    [[nodiscard]] inline std::expected<std::vector<uint8_t>, ConnectionError> get_forest_connections() {
-        return board_data::get_basic_connections<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, kForestConnectionIndexBits, kConnectedForestsOffset, sizeof(clearingData)>(clearingData);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> set_forest_connections(const std::vector<uint8_t> &newConnections) {
-        return board_data::set_basic_connections<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, kForestConnectionIndexBits, kConnectedForestsOffset, sizeof(clearingData)>(clearingData, newConnections);
-    }
-
-    [[nodiscard]] inline std::expected<void, ConnectionError> add_forest_connections(const std::vector<uint8_t> &newConnections) {
-        return board_data::add_basic_connections<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, kForestConnectionIndexBits, kConnectedForestsOffset, sizeof(clearingData)>(clearingData, newConnections);
-    }
-
-    [[nodiscard]] std::expected<void, ConnectionError> remove_forest_connections(const std::vector<uint8_t> &indices) {
-        return board_data::remove_basic_connections<kConnectedForestsCountBits, kConnectedForestsCountOffset, kMaxForestConnections, kForestConnectionIndexBits, kConnectedForestsOffset, sizeof(clearingData)>(clearingData, indices);
-    }
-
-    template <size_t I, size_t N>
-    inline static void unroll_separate_connections(const std::array<uint8_t, N> &combinedArray, std::vector< ClearingConnection> &separatedVector);
-
-    template <size_t I, size_t N>
-    inline static void unroll_separate_connections_filtered(const std::array<uint8_t, N> &combinedArray, std::vector<uint8_t> &separatedVector, ClearingConnectionType desiredConnectionType);
-
-    template <size_t I, size_t N>
-    inline void unroll_combine_clearing_connections(const std::vector<ClearingConnection> &separatedVector, std::array<uint8_t, N> &combinedArray);
-
+    
     template<game_data::faction_data::FactionID factionID>
     inline std::expected<void, PawnError> set_pawn_count_generic(uint8_t newCount);
 
