@@ -1,3 +1,0 @@
-/home/artificer/Desktop/RootAI/out/build/clang/CMakeFiles/RootAI.dir
-/home/artificer/Desktop/RootAI/out/build/clang/CMakeFiles/edit_cache.dir
-/home/artificer/Desktop/RootAI/out/build/clang/CMakeFiles/rebuild_cache.dir
